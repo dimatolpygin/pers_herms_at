@@ -126,9 +126,9 @@ API-доки клиента (в git, без секретов): `kie_ai_api.txt`,
   стиль «кореш/друг».
 - ✅ **2 — Долгосрочная память**: встроенная файловая, сохранение + recall работают.
 
-**Следующий — этап 3** (не начат): навык «код и тексты» — генерация **.docx (КП)** и **.csv (отчёты)**
-с отправкой файлом в Telegram. В hermes есть навыки `powerpoint`, `ocr-and-documents`, `nano-pdf` —
-проверить, что покрывает docx/csv, при нехватке доллить свой навык.
+**Сейчас — этап 3** (в работе): навык «код и тексты» — генерация **.docx (КП)** и **.csv (отчёты)**
+с отправкой файлом в Telegram. Уже добавлен локальный skill `business-documents`; этап ждёт живой
+проверки в Telegram, поэтому чекбоксы и тег `stage-3-done` пока не ставить.
 
 **Осталось**: этапы 3, 4 (контент: текст+картинка через kie.ai + Postgres-таблица), 5 (PostMyPost),
 6 (cron-автопостинг), 7 (деплой на VPS). Детали и критерии — в `docs/07_ROADMAP.md`.
@@ -175,6 +175,24 @@ API-доки клиента (в git, без секретов): `kie_ai_api.txt`,
   только по-русски». Если всплывёт в других местах — добавляй аналогичные инструкции.
 - **Память**: явные «запомни» нужно сохранять немедленно (правило в SOUL.md), иначе при коротком
   диалоге + `/reset` факт теряется до флаша.
+- **Hermes skills: установка и кэш.** Исходник stage-3 skill лежит в репо:
+  `hermes-skills/productivity/business-documents/`; установленная копия — в
+  `%LOCALAPPDATA%\hermes\skills\productivity\business-documents\`. После правки/установки skill
+  перезапускай **только gateway**, иначе Telegram может жить со старым skill-index. Dashboard можно
+  не трогать. Проверка: `hermes chat -q "Загрузи skill business-documents через skill_view..." -Q --max-turns 3`.
+- **Hermes `platforms` во frontmatter.** Не добавляй `platforms: [linux, macos, windows]` в локальные
+  skills без проверки: в текущем Hermes это распарсилось как строка и `skill_view` вернул
+  `Skill 'business-documents' is not supported on this platform`. Если OS-gate не нужен — лучше
+  вообще не указывать `platforms`.
+- **Файлы в Telegram.** Gateway умеет отправлять локальные `.docx`/`.csv` как документы, если в ответе
+  есть `MEDIA:<абсолютный путь>` без бэктиков. В CLI/TUI `MEDIA:` не использовать — там нужно просто
+  напечатать путь. Поддержка расширений есть в gateway (`.docx`, `.csv` в allowlist).
+- **Hermes terminal approval.** В `hermes chat` terminal-команды могут блокироваться approval-механикой
+  или упираться в окружение (`uv`, venv). Для stage-3 helper в skill прописан путь через `execute_code`;
+  это надёжнее, чем просить агента ставить `python-docx` или запускать произвольный terminal.
+- **DOCX без зависимостей.** На VPS 1 ГБ не тянуть лишние пакеты ради простого КП. Stage-3 helper
+  собирает минимальный Office Open XML через стандартную библиотеку Python; CSV пишет UTF-8 BOM +
+  `;`, чтобы Excel нормально открыл русскую таблицу.
 - **Playwright Chromium не установлен** (ECONNRESET при инсталле) — браузерные инструменты не
   работают. Доустановить при необходимости: `cd %LOCALAPPDATA%\hermes\hermes-agent && npx playwright install chromium`.
 
