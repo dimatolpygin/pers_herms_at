@@ -4,9 +4,9 @@
 > прочтения **обязательно** сверить с реальностью: `git tag -l "stage-*"`,
 > `git log --oneline -20` — таблица ниже может быть устаревшей.
 
-**Последнее обновление**: 2026-06-28 (этап 3 взят в работу)
+**Последнее обновление**: 2026-06-28 (этап 3: skill docx/csv реализован, ждёт Telegram UAT)
 **Текущий этап**: Этап 3 — Навык «код и тексты» (docx/csv) (🚧 в работе)
-**Следующий шаг**: проверить готовые навыки powerpoint/ocr-and-documents, настроить генерацию .docx (КП) и .csv (отчёты) с отправкой файлом в Telegram. Acceptance — в [`07_ROADMAP.md`](07_ROADMAP.md#этап-3).
+**Следующий шаг**: проверить в Telegram: «Сделай КП…» → `.docx` файлом, «Сделай отчёт-таблицу…» → `.csv` файлом. После живого подтверждения отметить acceptance в [`07_ROADMAP.md`](07_ROADMAP.md#этап-3) и закрыть stage 3 тегом.
 
 ---
 
@@ -29,11 +29,11 @@
 
 ## Активная работа
 
-Этап 3 взят в работу.
+Этап 3 в работе: добавлен локальный Hermes skill `business-documents` (исходник в `hermes-skills/productivity/business-documents`, установлен в `%LOCALAPPDATA%\hermes\skills\productivity\business-documents`).
 
-**Задача этапа 3**: проверить встроенные навыки hermes `powerpoint`/`ocr-and-documents`, при нехватке добавить лёгкий кастомный навык для генерации `.docx` (КП) и `.csv` (отчёты) и добиться отправки готовых файлов в Telegram.
+**Сделано**: встроенные `powerpoint`/`ocr-and-documents` проверены — прямой генерации КП/CSV не закрывают. Добавлен dependency-free Python helper: `.docx` собирается как Office Open XML, `.csv` пишется UTF-8 BOM + `;` для Excel. Skill инструктирует Telegram-ответы отдавать через `MEDIA:<absolute path>`.
 
-**План верификации**: CLI-проверка генерации файлов + живая проверка в Telegram человеком: запрос на КП → валидный `.docx`, запрос на отчёт-таблицу → валидный `.csv`, содержимое не заглушка.
+**Проверено**: прямой запуск helper создал валидный `.docx` (`word/document.xml` парсится) и `.csv` (BOM + ожидаемые колонки). `hermes chat` видит `business-documents` через `skill_view`. Живая Telegram-проверка ещё не проведена — чекбоксы stage 3 и тег не ставить.
 
 **Запущенные локальные процессы** (dev-окружение):
 - `hermes gateway` — Telegram-бот `@NEIRO_BRAIN01_BOT` (polling). Лог: `%LOCALAPPDATA%\hermes\logs\gateway.log`.
