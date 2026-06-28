@@ -1,0 +1,195 @@
+api.kie.ai
+model - gpt-image-2-text-to-image
+----------------------
+
+# Создание задачи
+
+post запрос: https://api.kie.ai/api/v1/jobs/createTask
+
+Authentication
+Generic Credential Type
+Generic Auth Type
+Bearer Auth
+Bearer Auth
+
+Тело запроса: 
+{
+  "model": "gpt-image-2-text-to-image",
+  "input": {
+    "prompt": {{ $json.message.content.toJsonString() }},
+    "aspect_ratio": "1:1"
+  }
+}
+
+## Пример ответа:
+
+[
+  {
+    "code": 200,
+    "msg": "success",
+    "data": {
+      "taskId": "cd783af4ab77dd93d977de06b27d65c9",
+      "recordId": "cd783af4ab77dd93d977de06b27d65c9"
+    }
+  }
+]
+-------------------------------------------------
+# Проверка 
+
+Method
+GET
+URL
+https://api.kie.ai/api/v1/jobs/recordInfo
+Authentication
+Generic Credential Type
+Generic Auth Type
+Bearer Auth
+Bearer Auth
+Send Query Parameters
+
+Specify Query Parameters
+Using Fields Below
+Query Parameters
+Name
+taskId
+Value
+{{ $json.data.taskId }}
+
+## Пример ответа :
+
+[
+  {
+    "code": 200,
+    "msg": "success",
+    "data": {
+      "taskId": "1e4522ac0bea3263bf2b6c2ce73cf546",
+      "model": "gpt-image-2-text-to-image",
+      "state": "success",
+      "param": "{\"input\":\"{\\\"aspect_ratio\\\":\\\"auto\\\",\\\"prompt\\\":\\\....\\\\n\\\\nСкажите, какой вариант (агрессивный или аналитический) предпочитаете, и есть ли у вас фото Михаила для использования — и я подготовлю финальный макет.\\\"}\",\"model\":\"gpt-image-2-text-to-image\"}",
+      "resultJson": "{\"resultUrls\":[\"https://tempfile.aiquickdraw.com/images/chatgpt/file_0000000004c87230913812a19181f742.png\"]}",
+      "failCode": null,
+      "failMsg": null,
+      "costTime": 53,
+      "completeTime": 1782620183756,
+      "createTime": 1782620129914,
+      "creditsConsumed": 6
+    }
+  }
+]
+ 
+
+# доп инфа
+
+Request
+Authorization
+Bearer Token
+Provide your bearer token in the Authorization header when making requests to protected resources.
+Example:
+Authorization: Bearer ********************
+Body Params
+application/json
+Required
+model
+enum<string> 
+required
+The model name used for generation. This field is required. This endpoint must use the gpt-image-2-text-to-image model.
+Value:
+gpt-image-2-text-to-image
+Default:
+gpt-image-2-text-to-image
+Example:
+gpt-image-2-text-to-image
+callBackUrl
+string <uri>
+optional
+Callback URL for task completion notifications. Optional parameter. If provided, the system will send a POST request to this URL when the task completes, whether it succeeds or fails. If omitted, no callback notification will be sent.
+Example:
+https://your-domain.com/api/callback
+input
+object 
+required
+Input parameters for the text-to-image task.
+prompt
+string 
+required
+Text prompt. Required, maximum 20,000 characters.
+>= 1 characters
+<= 20000 characters
+Example:
+A cinematic night city poster with neon reflections on a rainy street.
+aspect_ratio
+enum<string> 
+optional
+The aspect ratio of the generated image is set to auto by default.
+Note: for 2K and 4K resolution, the following aspect ratios are not supported: 5:4, 4:5, 3:1, 1:3, and 9:21.
+Allowed values:
+auto
+1:1
+3:2
+2:3
+4:3
+3:4
+5:4
+4:5
+16:9
+9:16
+2:1
+1:2
+3:1
+1:3
+21:9
+9:21
+resolution
+enum<string> 
+optional
+Image resolution: Note: Images with a 1:1 aspect ratio cannot be converted to 4K images. Images with the aspect ratio set to "auto" or without a specified aspect ratio parameter will only be converted to 1K images; otherwise, the task will fail to create.
+Allowed values:
+1K
+2K
+4K
+Examples
+Responses
+🟢200
+application/json
+Request successful
+Bodyapplication/json
+code
+enum<integer> 
+optional
+Response status code
+200: Success - Request has been processed successfully
+401: Unauthorized - Authentication credentials are missing or invalid
+402: Insufficient Credits - Account does not have enough credits to perform the operation
+404: Not Found - The requested resource or endpoint does not exist
+422: Validation Error - The request parameters failed validation checks
+429: Rate Limited - Request limit has been exceeded for this resource
+433: Request Limit - Sub-key Usage Exceeds Limit
+455: Service Unavailable - System is currently undergoing maintenance
+500: Server Error - An unexpected error occurred while processing the request
+501: Generation Failed - Content generation task failed
+505: Feature Disabled - The requested feature is currently disabled
+Allowed values:
+200
+401
+402
+404
+422
+429
+433
+455
+500
+501
+505
+msg
+string 
+optional
+Response message, error description when failed
+Example:
+success
+data
+object 
+required
+taskId
+string 
+required
+Task ID, can be used with Get Task Details endpoint to query task status
