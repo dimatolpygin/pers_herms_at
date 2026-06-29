@@ -6,7 +6,7 @@
 
 **Последнее обновление**: 2026-06-29 (этап 4 взят в работу)
 **Текущий этап**: Этап 4 — Навык «контент»: текст + картинка (гибко) (🚧 в работе)
-**Следующий шаг**: починить локальный запуск `hermes.exe`/gateway, затем провести живую Telegram-проверку `content-studio`: свободное описание → 3 текста + kie.ai-картинка + сохранение draft id.
+**Следующий шаг**: провести живую Telegram-проверку `content-studio`: свободное описание → 3 текста + kie.ai-картинка + сохранение draft id.
 
 ---
 
@@ -40,7 +40,7 @@
 
 - **PostMyPost (на будущее, этап 5)**: клиент оплачивает тариф «Продвинутый 5» (1490₽/мес) — нужен активный аккаунт для теста публикации.
 - **Прод-ключ OpenRouter (этап 7)**: сейчас стоит dev-ключ Анастасии; на прод нужен инференс-ключ с аккаунта клиента.
-- **Локальный `hermes.exe`**: CLI сейчас падает с `No Python at "C:\Users\GigaChat\AppData\Local\Programs\Python\Python311\python.exe"` — venv Hermes ссылается на отсутствующий Python 3.11. Для живой Telegram-проверки stage 4 нужно починить/переустановить hermes venv или использовать уже запущенный gateway, если он ещё жив.
+- **Локальный `hermes.exe` в Codex sandbox**: без escalation CLI может падать с `No Python at "C:\Users\GigaChat\AppData\Local\Programs\Python\Python311\python.exe"`, потому что sandbox не видит базовый Python venv. Вне sandbox Hermes CLI работает: `Hermes Agent v0.17.0`, Python 3.11.9; `skill_view` видит `content-studio` (CLI session `20260629_231213_e24de7`).
 
 _Архитектурное правило (актуально для всех этапов): сервер 1 ядро/1 ГБ → никакого локального инференса. STT=Groq API, vision=OpenRouter API (решено и внедрено на этапе 1)._
 

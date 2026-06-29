@@ -193,10 +193,10 @@ API-доки клиента (в git, без секретов): `kie_ai_api.txt`,
 - **Контент-таблица stage 4.** Локально Postgres в Docker: контейнер `postgres16`, БД `mydb`,
   отдельная схема проекта `hermes_agent`, таблица `content_drafts`. Миграция:
   `migrations/0001_content_drafts.sql`. Не пиши таблицы stage 4 в `public`, там могут быть другие проекты.
-- **Локальный Hermes venv сейчас сломан.** `hermes --version` и полный путь к `hermes.exe` падают с
-  `No Python at "C:\Users\GigaChat\AppData\Local\Programs\Python\Python311\python.exe"`. Перед живой
-  Telegram-проверкой stage 4 нужно починить/переустановить Hermes venv или опереться на уже запущенный
-  gateway, если он ещё работает.
+- **Hermes CLI из Codex sandbox.** Без escalation `hermes --version` и полный путь к `hermes.exe`
+  могут падать с `No Python at "C:\Users\GigaChat\AppData\Local\Programs\Python\Python311\python.exe"`.
+  Это не поломка venv: вне sandbox Hermes работает (`Hermes Agent v0.17.0`, Python 3.11.9). Для CLI/gateway
+  проверок из Codex запускай Hermes с escalation.
 - **Hermes `platforms` во frontmatter.** Не добавляй `platforms: [linux, macos, windows]` в локальные
   skills без проверки: в текущем Hermes это распарсилось как строка и `skill_view` вернул
   `Skill 'business-documents' is not supported on this platform`. Если OS-gate не нужен — лучше
