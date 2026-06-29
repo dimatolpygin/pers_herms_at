@@ -115,12 +115,26 @@ def fallback_spec(brief: str, kind: str) -> dict[str, Any]:
         }
     return {
         "title": "Отчёт",
-        "columns": ["Раздел", "Статус", "Комментарий"],
-        "rows": [
-            ["Запрос", "Принято", brief],
-            ["Следующий шаг", "К выполнению", "Уточнить метрики, сроки и ответственных при необходимости."],
+        "sections": [
+            {
+                "heading": "Краткое описание",
+                "paragraphs": [f"Отчёт создан на основе запроса: {brief}"],
+            },
+            {
+                "heading": "Сводная таблица",
+                "table": {
+                    "columns": ["Раздел", "Статус", "Комментарий"],
+                    "rows": [
+                        ["Запрос", "Принято", brief],
+                        ["Следующий шаг", "К выполнению", "Уточнить метрики, сроки и ответственных при необходимости."],
+                    ],
+                },
+            },
+            {
+                "heading": "Примечания",
+                "bullets": ["Отчёт создан на основе краткого запроса пользователя."],
+            },
         ],
-        "notes": ["Отчёт создан на основе краткого запроса пользователя."],
     }
 
 
@@ -222,6 +236,135 @@ def normalize_report_rows(spec: dict[str, Any]) -> tuple[list[str], list[list[An
         if not columns:
             columns = [f"Колонка {i + 1}" for i in range(max(len(row) for row in normalized))]
     return [str(col) for col in columns], normalized
+
+
+def normalize_table(columns: Any, rows: Any) -> tuple[list[str], list[list[Any]]]:
+    raw_rows = as_list(rows)
+    raw_columns = as_list(columns)
+    if raw_rows and isinstance(raw_rows[0], dict):
+        if not raw_columns:
+            seen: list[str] = []
+            for row in raw_rows:
+                for key in row.keys():
+                    key = str(key)
+                    if key not in seen:
+                        seen.append(key)
+            raw_columns = seen
+        normalized = [[row.get(col, "") for col in raw_columns] for row in raw_rows]
+    else:
+        normalized = [as_list(row) for row in raw_rows]
+        if not raw_columns and normalized:
+            raw_columns = [f"Колонка {i + 1}" for i in range(max(len(row) for row in normalized))]
+    return [str(col) for col in raw_columns], normalized
+
+
+def csv_delimiter(spec: dict[str, Any], default: str) -> str:
+    raw = clean_text(spec.get("delimiter") or spec.get("separator") or default).lower()
+    aliases = {
+        "comma": ",",
+        "запятая": ",",
+        ",": ",",
+        "semicolon": ";",
+        "точка с запятой": ";",
+        ";": ";",
+        "tab": "\t",
+        "tsv": "\t",
+        "\\t": "\t",
+    }
+    return aliases.get(raw, default)
+
+
+def section_tables(section: dict[str, Any]) -> list[dict[str, Any]]:
+    tables: list[dict[str, Any]] = []
+    if isinstance(section.get("table"), dict):
+        tables.append(section["table"])
+    for table in as_list(section.get("tables")):
+        if isinstance(table, dict):
+            tables.append(table)
+    if section.get("columns") or section.get("rows"):
+        tables.append({"columns": section.get("columns"), "rows": section.get("rows")})
+    return tables
+
+
+def report_layout_width(spec: dict[str, Any]) -> int:
+    width = int(spec.get("layout_columns") or 3)
+    for section in as_list(spec.get("sections")):
+        if not isinstance(section, dict):
+            continue
+        for table in section_tables(section):
+            columns, rows = normalize_table(table.get("columns"), table.get("rows"))
+            width = max(width, len(columns), *(len(row) for row in rows), 3)
+    if spec.get("columns") or spec.get("rows"):
+        columns, rows = normalize_report_rows(spec)
+        width = max(width, len(columns), *(len(row) for row in rows), 3)
+    return width
+
+
+def padded_row(values: list[Any], width: int) -> list[str]:
+    row = [clean_text(value) for value in values]
+    if len(row) < width:
+        row.extend([""] * (width - len(row)))
+    return row
+
+
+def write_pretty_csv(spec: dict[str, Any], out_file: Path) -> None:
+    width = report_layout_width(spec)
+    delimiter = csv_delimiter(spec, default=",")
+    with open(out_file, "w", encoding="utf-8-sig", newline="") as fh:
+        writer = csv.writer(fh, delimiter=delimiter)
+
+        def emit(values: list[Any] | None = None) -> None:
+            writer.writerow(padded_row(values or [], width))
+
+        title = clean_text(spec.get("title") or "Отчёт")
+        emit([title])
+        emit()
+
+        if spec.get("summary"):
+            for paragraph_text in as_list(spec.get("summary")):
+                for line in clean_text(paragraph_text).split("\n"):
+                    emit([line])
+            emit()
+
+        for raw_section in as_list(spec.get("sections")):
+            if isinstance(raw_section, str):
+                emit([raw_section])
+                emit()
+                continue
+            if not isinstance(raw_section, dict):
+                continue
+
+            if raw_section.get("heading"):
+                emit([raw_section["heading"]])
+
+            for paragraph_text in as_list(raw_section.get("paragraphs") or raw_section.get("body")):
+                for line in clean_text(paragraph_text).split("\n"):
+                    emit([line])
+
+            if raw_section.get("items"):
+                for item in as_list(raw_section.get("items")):
+                    emit([f"•  {clean_text(item)}"])
+
+            if raw_section.get("bullets"):
+                for item in as_list(raw_section.get("bullets")):
+                    emit([f"•  {clean_text(item)}"])
+
+            for table in section_tables(raw_section):
+                if table.get("caption"):
+                    emit([table["caption"]])
+                columns, rows = normalize_table(table.get("columns"), table.get("rows"))
+                if columns:
+                    emit(columns)
+                for row in rows:
+                    emit(row)
+
+            emit()
+
+        notes = as_list(spec.get("notes"))
+        if notes:
+            emit(["Важные замечания"])
+            for note in notes:
+                emit([f"•  {clean_text(note)}"])
 
 
 def build_proposal_document(spec: dict[str, Any]) -> str:
@@ -372,9 +515,14 @@ def validate_docx(path: Path) -> None:
 
 
 def write_csv(spec: dict[str, Any], out_file: Path) -> None:
+    if spec.get("sections") or spec.get("summary"):
+        write_pretty_csv(spec, out_file)
+        return
+
     columns, rows = normalize_report_rows(spec)
+    delimiter = csv_delimiter(spec, default=";")
     with open(out_file, "w", encoding="utf-8-sig", newline="") as fh:
-        writer = csv.writer(fh, delimiter=";")
+        writer = csv.writer(fh, delimiter=delimiter)
         writer.writerow(columns)
         for row in rows:
             writer.writerow([clean_text(cell) for cell in row])

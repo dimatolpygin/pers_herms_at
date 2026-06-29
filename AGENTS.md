@@ -190,9 +190,15 @@ API-доки клиента (в git, без секретов): `kie_ai_api.txt`,
 - **Hermes terminal approval.** В `hermes chat` terminal-команды могут блокироваться approval-механикой
   или упираться в окружение (`uv`, venv). Для stage-3 helper в skill прописан путь через `execute_code`;
   это надёжнее, чем просить агента ставить `python-docx` или запускать произвольный terminal.
+- **CSV “красота” как в образце.** CSV не хранит стили, цвета, ширины колонок и объединения ячеек.
+  Красивый вид делается структурой строк: заголовок, пустые строки, секции, буллеты и отдельные
+  таблицы. Образец для stage 3: `C:\Users\GigaChat\Downloads\Затирки.xlsx - Litokol Litochrom 1-6.csv`.
+  В `business-documents` для таких отчётов используй `sections`, а не одну плоскую `columns/rows`
+  таблицу. Section-based CSV по умолчанию пишет UTF-8 BOM + запятую, как в образце; legacy flat CSV
+  оставлен с `;`.
 - **DOCX без зависимостей.** На VPS 1 ГБ не тянуть лишние пакеты ради простого КП. Stage-3 helper
-  собирает минимальный Office Open XML через стандартную библиотеку Python; CSV пишет UTF-8 BOM +
-  `;`, чтобы Excel нормально открыл русскую таблицу.
+  собирает минимальный Office Open XML через стандартную библиотеку Python; CSV тоже генерится
+  стандартной библиотекой.
 - **Playwright Chromium не установлен** (ECONNRESET при инсталле) — браузерные инструменты не
   работают. Доустановить при необходимости: `cd %LOCALAPPDATA%\hermes\hermes-agent && npx playwright install chromium`.
 

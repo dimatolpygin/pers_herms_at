@@ -17,11 +17,13 @@ metadata:
 This skill produces two deliverables for the Hermes client workflow:
 
 - Commercial proposals / КП as valid `.docx` files.
-- Simple business reports as Excel-friendly `.csv` files.
+- Readable business reports as Excel-friendly `.csv` files with a document-style layout:
+  title, spacer rows, sections, paragraphs, bullet lists, and embedded tables.
 
 Use the bundled `scripts/business_docs.py` helper. It has no third-party dependencies: `.docx`
-is generated as a minimal Office Open XML package and `.csv` is written as UTF-8 with BOM and
-semicolon delimiters for Russian Excel compatibility.
+is generated as a minimal Office Open XML package and `.csv` is written as UTF-8 with BOM. For
+section-based reports the default delimiter is comma, matching spreadsheet-export CSV samples;
+flat legacy `columns`/`rows` reports default to semicolon.
 
 ## When to Use
 
@@ -38,13 +40,16 @@ Do not use this skill for slide decks (`powerpoint`), OCR/extraction from existi
 
 1. Decide the deliverable:
    - КП / commercial proposal -> `proposal` -> `.docx`.
-   - report table / Excel-ready summary -> `report` -> `.csv`.
+   - report / Excel-ready summary -> `report` -> `.csv`.
    Completion: one output kind is selected.
 
 2. Draft real content from the user's request before running the script.
    - Do not create empty placeholders.
    - If a detail is missing but non-critical, make a reasonable assumption and include it in the document.
    - Ask a follow-up only when the missing data changes the document's purpose or recipient.
+   - For CSV reports, prefer `sections` over a single flat `columns`/`rows` table. A good CSV report
+     should look like the reference product report: title row, blank separator rows, section headings,
+     bullet lists, and compact tables inside sections.
    Completion: the spec has enough concrete text to stand on its own.
 
 3. Write a UTF-8 JSON spec file and run the helper script.
@@ -129,7 +134,50 @@ module.main(["proposal", "--spec", str(spec_path)])
 
 ## Report Spec
 
-Minimal JSON:
+Recommended section-based JSON:
+
+```json
+{
+  "title": "Подробный отчёт по проекту Hermes Agent",
+  "summary": "Краткая вводная строка отчёта.",
+  "sections": [
+    {
+      "heading": "Обзор",
+      "paragraphs": [
+        "Hermes Agent настраивается как персональный Telegram-агент с памятью, голосом и генерацией документов."
+      ],
+      "bullets": ["Текст и голос уже работают", "Память подключена", "Документы генерируются файлами"]
+    },
+    {
+      "heading": "Статус этапов",
+      "table": {
+        "columns": ["Этап", "Статус", "Проверка"],
+        "rows": [
+          ["0 Каркас", "закрыт", "stage-0-done"],
+          ["1 Живой мозг", "закрыт", "stage-1-done"],
+          ["2 Память", "закрыт", "stage-2-done"],
+          ["3 Docx/csv", "в работе", "ждёт Telegram UAT"]
+        ]
+      }
+    },
+    {
+      "heading": "Важные замечания",
+      "bullets": [
+        "CSV не хранит цвета, шрифты и ширины колонок; красота достигается структурой строк.",
+        "Для настоящего визуального оформления нужен .xlsx или .docx."
+      ]
+    }
+  ]
+}
+```
+
+Command:
+
+```bash
+python scripts/business_docs.py report --spec report.json
+```
+
+Flat legacy JSON is still supported:
 
 ```json
 {
@@ -138,15 +186,8 @@ Minimal JSON:
   "rows": [
     ["Каркас Hermes", "Готово", "Бот отвечает в Telegram"],
     ["Docx/csv", "В работе", "Добавляется навык генерации файлов"]
-  ],
-  "notes": ["CSV записывается в UTF-8 with BOM; разделитель - точка с запятой."]
+  ]
 }
-```
-
-Command:
-
-```bash
-python scripts/business_docs.py report --spec report.json
 ```
 
 ## Output Contract
@@ -172,10 +213,13 @@ Use the exact `path` value for delivery. Do not invent or restate a different pa
 2. Returning the path inside backticks on Telegram.
    Fix: use `MEDIA:<absolute path>` without backticks so the gateway uploads it.
 
-3. Writing comma CSV for Russian Excel.
-   Fix: let the helper write semicolon-delimited UTF-8 BOM CSV.
+3. Expecting CSV to preserve colors, fonts, merged cells, or column widths.
+   Fix: CSV cannot store visual formatting. Use section layout for readable CSV, or switch the user to `.xlsx`/`.docx` if true visual styling is required.
 
-4. Forgetting that CLI cannot upload attachments.
+4. Writing every report as one flat table.
+   Fix: for product, annual, analytical, or research reports, use `sections` with headings, bullets, and embedded tables.
+
+5. Forgetting that CLI cannot upload attachments.
    Fix: in CLI/TUI, print the absolute path plainly instead of `MEDIA:`.
 
 ## Verification Checklist

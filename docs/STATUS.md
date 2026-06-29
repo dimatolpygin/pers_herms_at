@@ -4,7 +4,7 @@
 > прочтения **обязательно** сверить с реальностью: `git tag -l "stage-*"`,
 > `git log --oneline -20` — таблица ниже может быть устаревшей.
 
-**Последнее обновление**: 2026-06-28 (этап 3: skill docx/csv реализован, ждёт Telegram UAT)
+**Последнее обновление**: 2026-06-29 (этап 3: CSV layout доработан под образец, ждёт Telegram UAT)
 **Текущий этап**: Этап 3 — Навык «код и тексты» (docx/csv) (🚧 в работе)
 **Следующий шаг**: проверить в Telegram: «Сделай КП…» → `.docx` файлом, «Сделай отчёт-таблицу…» → `.csv` файлом. После живого подтверждения отметить acceptance в [`07_ROADMAP.md`](07_ROADMAP.md#этап-3) и закрыть stage 3 тегом.
 
@@ -31,9 +31,9 @@
 
 Этап 3 в работе: добавлен локальный Hermes skill `business-documents` (исходник в `hermes-skills/productivity/business-documents`, установлен в `%LOCALAPPDATA%\hermes\skills\productivity\business-documents`).
 
-**Сделано**: встроенные `powerpoint`/`ocr-and-documents` проверены — прямой генерации КП/CSV не закрывают. Добавлен dependency-free Python helper: `.docx` собирается как Office Open XML, `.csv` пишется UTF-8 BOM + `;` для Excel. Skill инструктирует Telegram-ответы отдавать через `MEDIA:<absolute path>`.
+**Сделано**: встроенные `powerpoint`/`ocr-and-documents` проверены — прямой генерации КП/CSV не закрывают. Добавлен dependency-free Python helper: `.docx` собирается как Office Open XML, `.csv` пишется UTF-8 BOM. Для красивых отчётов CSV теперь поддерживает document-style layout как в образце `Затирки.xlsx - Litokol Litochrom 1-6.csv`: заголовок, пустые строки, секции, буллеты и таблицы внутри файла. Skill инструктирует Telegram-ответы отдавать через `MEDIA:<absolute path>`.
 
-**Проверено**: прямой запуск helper создал валидный `.docx` (`word/document.xml` парсится) и `.csv` (BOM + ожидаемые колонки). `hermes chat` видит `business-documents` через `skill_view`. Живая Telegram-проверка ещё не проведена — чекбоксы stage 3 и тег не ставить.
+**Проверено**: прямой запуск helper создал валидный `.docx` (`word/document.xml` парсится), плоский `.csv` и красивый section-based `.csv` (BOM + layout как в образце). `hermes chat` видит `business-documents` через `skill_view`. Живая Telegram-проверка после CSV-доработки ещё не проведена — чекбоксы stage 3 и тег не ставить.
 
 **Запущенные локальные процессы** (dev-окружение):
 - `hermes gateway` — Telegram-бот `@NEIRO_BRAIN01_BOT` (polling). Лог: `%LOCALAPPDATA%\hermes\logs\gateway.log`.
