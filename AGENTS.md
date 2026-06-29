@@ -131,8 +131,10 @@ API-доки клиента (в git, без секретов): `kie_ai_api.txt`,
 **Сейчас — этап 4** (в работе): навык «контент» — свободное описание/ссылка/Tilda → 3 версии текста
 и картинка через kie.ai → превью → сохранение черновика в Postgres. Уже добавлен локальный skill
 `content-studio`, миграция `migrations/0001_content_drafts.sql` применена в локальной Docker-БД
-`mydb`, схема `hermes_agent`, таблица `content_drafts`; тестовая запись helper вернула draft `id=2`.
-Этап НЕ закрыт: ещё нужна живая Telegram-проверка с реальным kie.ai и превью.
+`mydb`, схема `hermes_agent`, таблица `content_drafts`; тестовая запись helper вернула draft `id=2`,
+реальный kie.ai `prepare --generate-image --save --require-postgres` вернул task
+`d2471fea927171559ff5b621c732dca5`, скачал картинку в `%LOCALAPPDATA%\hermes\artifacts\content-studio\images\...233050.png`
+и сохранил draft `id=3`. Этап НЕ закрыт: ещё нужна живая Telegram-проверка с превью от агента.
 
 **Осталось**: завершить stage 4, затем 5 (PostMyPost), 6 (cron-автопостинг), 7 (деплой на VPS).
 Детали и критерии — в `docs/07_ROADMAP.md`.
