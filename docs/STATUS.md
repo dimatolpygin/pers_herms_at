@@ -4,9 +4,9 @@
 > прочтения **обязательно** сверить с реальностью: `git tag -l "stage-*"`,
 > `git log --oneline -20` — таблица ниже может быть устаревшей.
 
-**Последнее обновление**: 2026-06-29 (этап 3: CSV layout доработан под образец, ждёт Telegram UAT)
-**Текущий этап**: Этап 3 — Навык «код и тексты» (docx/csv) (🚧 в работе)
-**Следующий шаг**: проверить в Telegram: «Сделай КП…» → `.docx` файлом, «Сделай отчёт-таблицу…» → `.csv` файлом. После живого подтверждения отметить acceptance в [`07_ROADMAP.md`](07_ROADMAP.md#этап-3) и закрыть stage 3 тегом.
+**Последнее обновление**: 2026-06-29 (этап 3 закрыт, следующий — этап 4)
+**Текущий этап**: Этап 4 — Навык «контент»: текст + картинка (гибко) (☐ не начат)
+**Следующий шаг**: взять этап 4 в работу отдельным `chore(status): start stage 4`; начать с таблицы контента, сценария 3 версий текста и генерации/обработки картинки через kie.ai.
 
 ---
 
@@ -19,7 +19,7 @@
 | 0 | Каркас: hermes-agent поднят локально | ✅ | `stage-0-done` | `ed4e485` | 2026-06-28 |
 | 1 | Живой мозг: текст + голос + стиль | ✅ | `stage-1-done` | `fb08808` | 2026-06-28 |
 | 2 | Долгосрочная память | ✅ | `stage-2-done` | `fa0fde4` | 2026-06-28 |
-| 3 | Навык «код и тексты» (docx/csv) | 🚧 | `stage-3-done` | — | — |
+| 3 | Навык «код и тексты» (docx/csv) | ✅ | `stage-3-done` | `TO_FILL_STAGE3_CLOSE_HASH` | 2026-06-29 |
 | 4 | Навык «контент»: текст + картинка (гибко) | ☐ | `stage-4-done` | — | — |
 | 5 | Навык публикации PostMyPost (куда/когда) | ☐ | `stage-5-done` | — | — |
 | 6 | Автопостинг по расписанию (cron-обвязка) | ☐ | `stage-6-done` | — | — |
@@ -29,11 +29,7 @@
 
 ## Активная работа
 
-Этап 3 в работе: добавлен локальный Hermes skill `business-documents` (исходник в `hermes-skills/productivity/business-documents`, установлен в `%LOCALAPPDATA%\hermes\skills\productivity\business-documents`).
-
-**Сделано**: встроенные `powerpoint`/`ocr-and-documents` проверены — прямой генерации КП/CSV не закрывают. Добавлен dependency-free Python helper: `.docx` собирается как Office Open XML, `.csv` пишется UTF-8 BOM. Для красивых отчётов CSV теперь поддерживает document-style layout как в образце `Затирки.xlsx - Litokol Litochrom 1-6.csv`: заголовок, пустые строки, секции, буллеты и таблицы внутри файла. Skill инструктирует Telegram-ответы отдавать через `MEDIA:<absolute path>`.
-
-**Проверено**: прямой запуск helper создал валидный `.docx` (`word/document.xml` парсится), плоский `.csv` и красивый section-based `.csv` (BOM + layout как в образце). `hermes chat` видит `business-documents` через `skill_view`. Живая Telegram-проверка после CSV-доработки ещё не проведена — чекбоксы stage 3 и тег не ставить.
+Активной работы нет: этап 3 закрыт, этап 4 ещё не взят в работу. Перед стартом этапа 4 обновить STATUS отдельным коммитом `chore(status): start stage 4`.
 
 **Запущенные локальные процессы** (dev-окружение):
 - `hermes gateway` — Telegram-бот `@NEIRO_BRAIN01_BOT` (polling). Лог: `%LOCALAPPDATA%\hermes\logs\gateway.log`.
@@ -48,6 +44,10 @@
 _Архитектурное правило (актуально для всех этапов): сервер 1 ядро/1 ГБ → никакого локального инференса. STT=Groq API, vision=OpenRouter API (решено и внедрено на этапе 1)._
 
 ## История закрытий
+
+2026-06-29 — Этап 3: Навык «код и тексты» (docx/csv) — tag `stage-3-done`.
+Реализован локальный Hermes skill `business-documents`: исходник `hermes-skills/productivity/business-documents`, установленная копия `%LOCALAPPDATA%\hermes\skills\productivity\business-documents`. Helper без сторонних зависимостей: `.docx` собирается как Office Open XML, `.csv` пишется UTF-8 BOM; для отчётов поддержан section-based layout с заголовком, секциями, буллетами и таблицами внутри CSV.
+**Верификация**: Анастасия/Kira подтвердила закрытие после живой Telegram-проверки stage 3 (команда «закрой этап 3», 2026-06-29). В логах gateway/agent за 2026-06-29 видна проверка CSV через Telegram: замечание по разметке CSV в 21:52, загрузка образца `Затирки.xlsx - Litokol Litochrom 1-6.csv` в 22:04, повторная проверка `business-documents` в 22:22-22:24. Машинная проверка артефактов: `kp_коммерческое_предложение_персональный_ии-агент_20260628_215641.docx` валиден как zip/Office XML (`word/document.xml` парсится), `installed_pretty_saka_kaka_report.csv` имеет UTF-8 BOM и 29 строк/23 непустые строки. ROADMAP acceptance stage 3 отмечен `[x]`.
 
 2026-06-28 — Этап 2: Долгосрочная память — tag `stage-2-done`.
 Используется **встроенная файловая память hermes** (БД не нужна): `memories/USER.md` (профиль) + `memories/MEMORY.md` (заметки агента), выборочно вшиваются в системный промпт каждой сессии. Проверено: сохранение факта → recall в новой сессии (после `/new`) — и в CLI, и в Telegram.
