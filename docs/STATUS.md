@@ -6,7 +6,7 @@
 
 **Последнее обновление**: 2026-06-29 (этап 4 взят в работу)
 **Текущий этап**: Этап 4 — Навык «контент»: текст + картинка (гибко) (🚧 в работе)
-**Следующий шаг**: провести живую Telegram-проверку `content-studio`: свободное описание → 3 текста + kie.ai-картинка + сохранение draft id.
+**Следующий шаг**: провести живую Telegram-проверку `content-studio` человеком: свободное описание → 3 текста + kie.ai-картинка в превью + сохранение draft id; после подтверждения отметить ROADMAP и закрыть stage 4.
 
 ---
 
@@ -29,7 +29,7 @@
 
 ## Активная работа
 
-Этап 4 в работе. Добавлен локальный Hermes skill `content-studio`: исходник `hermes-skills/marketing/content-studio`, установленная копия `%LOCALAPPDATA%\hermes\skills\marketing\content-studio`. Добавлена миграция `migrations/0001_content_drafts.sql`; она применена в локальный Docker Postgres `postgres16` / БД `mydb`, схема `hermes_agent`, таблица `content_drafts`. Helper `content_studio.py` поддерживает URL/Tilda extraction, kie.ai (`createTask` → `recordInfo` → download), сохранение draft в Postgres через Python-драйвер или `CONTENT_PSQL_COMMAND`, и JSONL fallback для dev. Проверено: mock image path contract работает; запись через `CONTENT_PSQL_COMMAND='docker exec -i postgres16 psql -U postgres -d mydb -At -v ON_ERROR_STOP=1'` вернула Postgres draft `id=2`; реальный kie.ai `prepare --generate-image --save --require-postgres` вернул task `d2471fea927171559ff5b621c732dca5`, скачал картинку в `%LOCALAPPDATA%\hermes\artifacts\content-studio\images\file_00000000b768722f9785e46634905438_20260629_233050.png` и сохранил draft `id=3`.
+Этап 4 в работе. Добавлен локальный Hermes skill `content-studio`: исходник `hermes-skills/marketing/content-studio`, установленная копия `%LOCALAPPDATA%\hermes\skills\marketing\content-studio`. Добавлена миграция `migrations/0001_content_drafts.sql`; она применена в локальный Docker Postgres `postgres16` / БД `mydb`, схема `hermes_agent`, таблица `content_drafts`. Helper `content_studio.py` поддерживает URL/Tilda extraction, kie.ai (`createTask` → `recordInfo` → download), сохранение draft в Postgres через Python-драйвер или `CONTENT_PSQL_COMMAND`, и JSONL fallback для dev. Проверено: mock image path contract работает; запись через `CONTENT_PSQL_COMMAND='docker exec -i postgres16 psql -U postgres -d mydb -At -v ON_ERROR_STOP=1'` вернула Postgres draft `id=2`; реальный helper `prepare --generate-image --save --require-postgres` вернул task `d2471fea927171559ff5b621c732dca5`, скачал картинку в `%LOCALAPPDATA%\hermes\artifacts\content-studio\images\file_00000000b768722f9785e46634905438_20260629_233050.png` и сохранил draft `id=3`; агентный CLI UAT через `hermes chat --skills content-studio` сделал 3 текста, сгенерировал kie.ai картинку `%LOCALAPPDATA%\hermes\artifacts\content-studio\images\file_000000009e7471fd8b551bba92eff922_20260629_234019.png` и сохранил draft `id=4` (session `20260629_233600_4dd743`). ROADMAP stage 4 пока без `[x]`, потому что нужна живая Telegram-проверка человеком.
 
 **Запущенные локальные процессы** (dev-окружение):
 - `hermes gateway` — Telegram-бот `@NEIRO_BRAIN01_BOT` (polling). Лог: `%LOCALAPPDATA%\hermes\logs\gateway.log`.

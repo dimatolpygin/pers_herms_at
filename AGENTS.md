@@ -134,7 +134,10 @@ API-доки клиента (в git, без секретов): `kie_ai_api.txt`,
 `mydb`, схема `hermes_agent`, таблица `content_drafts`; тестовая запись helper вернула draft `id=2`,
 реальный kie.ai `prepare --generate-image --save --require-postgres` вернул task
 `d2471fea927171559ff5b621c732dca5`, скачал картинку в `%LOCALAPPDATA%\hermes\artifacts\content-studio\images\...233050.png`
-и сохранил draft `id=3`. Этап НЕ закрыт: ещё нужна живая Telegram-проверка с превью от агента.
+и сохранил draft `id=3`. Агентный CLI UAT через `hermes chat --skills content-studio` сделал 3 текста,
+сгенерировал картинку `%LOCALAPPDATA%\hermes\artifacts\content-studio\images\...234019.png` и сохранил
+draft `id=4` (session `20260629_233600_4dd743`). Этап НЕ закрыт: ещё нужна живая Telegram-проверка
+с превью от агента.
 
 **Осталось**: завершить stage 4, затем 5 (PostMyPost), 6 (cron-автопостинг), 7 (деплой на VPS).
 Детали и критерии — в `docs/07_ROADMAP.md`.
