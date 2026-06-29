@@ -1,0 +1,29 @@
+{
+  "source_type": "freeform",
+  "source_value": "Локальная проверка helper без живых API",
+  "topic": "Персональный ИИ-агент для предпринимателя",
+  "product_name": "Hermes Agent",
+  "raw_input": {
+    "brief": "Сделай пост про персонального ИИ-агента, который отвечает в Telegram, помнит договорённости и помогает с текстами."
+  },
+  "text_versions": [
+    {
+      "angle": "direct",
+      "text": "Персональный ИИ-агент в Telegram берёт на себя рутину: отвечает на вопросы, помнит важные договорённости и помогает быстро собирать тексты, КП и отчёты. Подходит предпринимателю, которому нужен помощник под рукой без сложной панели."
+    },
+    {
+      "angle": "warm",
+      "text": "Представьте помощника, который всегда рядом в Telegram: помнит контекст, понимает голосовые, помогает с документами и не теряет детали между разговорами. Hermes Agent собирается под стиль владельца, поэтому общение ощущается не как шаблонный бот, а как рабочий напарник."
+    },
+    {
+      "angle": "sales",
+      "text": "Хотите меньше тратить время на переписки, черновики и повторяющиеся задачи? Персональный Hermes Agent отвечает в Telegram, работает с голосом, хранит долгосрочную память и готовит деловые тексты. Напишите задачу обычными словами — агент доведёт её до результата."
+    }
+  ],
+  "selected_version": 1,
+  "image_prompt": "Clean modern social media visual for a personal AI assistant in Telegram, entrepreneur workspace, smartphone chat interface, warm professional lighting, no text overlays.",
+  "image_url": "https://example.com/mock-image.png",
+  "image_path": "D:\\claude\\хермес\\tmp\\mock-image.png",
+  "platforms": ["telegram", "instagram"],
+  "status": "draft"
+}

@@ -1,0 +1,699 @@
+#!/usr/bin/env python3
+"""Prepare social content drafts for Hermes.
+
+The helper intentionally stays dependency-light. Kie.ai calls use urllib from
+the standard library. Postgres writes use psycopg/psycopg2 only when one of
+those drivers is already installed; otherwise the helper writes a local JSONL
+draft so the Telegram flow can still be tested before DB setup.
+"""
+
+from __future__ import annotations
+
+import argparse
+import html
+import json
+import mimetypes
+import os
+import re
+import shlex
+import subprocess
+import sys
+import time
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
+
+
+CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+SCRIPT_STYLE_RE = re.compile(r"<(script|style|noscript)\b[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
+TAG_RE = re.compile(r"<[^>]+>")
+SPACE_RE = re.compile(r"\s+")
+PLACEHOLDER_RE = re.compile(r"\b(lorem|todo|placeholder)\b|заглушк|рыба текста", re.IGNORECASE)
+IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
+
+KIE_MODEL = "gpt-image-2-text-to-image"
+KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask"
+KIE_RECORD_URL = "https://api.kie.ai/api/v1/jobs/recordInfo"
+
+
+class ContentStudioError(RuntimeError):
+    pass
+
+
+def clean_text(value: Any) -> str:
+    text = "" if value is None else str(value)
+    text = CONTROL_CHARS.sub("", text)
+    return SPACE_RE.sub(" ", text.replace("\r\n", "\n").replace("\r", "\n")).strip()
+
+
+def as_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return [value]
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def default_artifact_dir() -> Path:
+    explicit = os.environ.get("CONTENT_STUDIO_ARTIFACT_DIR")
+    if explicit:
+        return Path(explicit)
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / "hermes" / "artifacts" / "content-studio"
+    return Path.home() / ".hermes" / "artifacts" / "content-studio"
+
+
+def load_json(path: str) -> dict[str, Any]:
+    with open(path, "r", encoding="utf-8-sig") as fh:
+        data = json.load(fh)
+    if not isinstance(data, dict):
+        raise ContentStudioError("Spec JSON must be an object")
+    return data
+
+
+def print_json(payload: dict[str, Any]) -> None:
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def response_payload(payload: Any) -> dict[str, Any]:
+    if isinstance(payload, list):
+        if not payload:
+            raise ContentStudioError("API returned an empty list")
+        payload = payload[0]
+    if not isinstance(payload, dict):
+        raise ContentStudioError("API returned a non-object response")
+    code = payload.get("code")
+    if code not in (None, 200, "200"):
+        msg = payload.get("msg") or payload.get("message") or "unknown API error"
+        raise ContentStudioError(f"API error {code}: {msg}")
+    return payload
+
+
+def http_json(
+    method: str,
+    url: str,
+    *,
+    token: str | None = None,
+    body: dict[str, Any] | None = None,
+    timeout: int = 30,
+) -> dict[str, Any]:
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "HermesContentStudio/1.0",
+    }
+    data = None
+    if body is not None:
+        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = Request(url, data=data, headers=headers, method=method.upper())
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8")
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise ContentStudioError(f"HTTP {exc.code} from {url}: {detail[:500]}") from exc
+    except URLError as exc:
+        raise ContentStudioError(f"Network error for {url}: {exc.reason}") from exc
+    return response_payload(json.loads(raw))
+
+
+def kie_token() -> str:
+    token = os.environ.get("KIE_AI_API_KEY") or os.environ.get("KIE_API_KEY") or os.environ.get("KIE_TOKEN")
+    if not token:
+        raise ContentStudioError("Set KIE_AI_API_KEY or KIE_API_KEY before calling kie.ai")
+    return token
+
+
+def kie_create_task(prompt: str, aspect_ratio: str, resolution: str | None, timeout: int) -> str:
+    input_payload: dict[str, Any] = {
+        "prompt": clean_text(prompt),
+        "aspect_ratio": aspect_ratio,
+    }
+    if resolution:
+        input_payload["resolution"] = resolution
+    payload = http_json(
+        "POST",
+        KIE_CREATE_URL,
+        token=kie_token(),
+        body={"model": KIE_MODEL, "input": input_payload},
+        timeout=timeout,
+    )
+    data = payload.get("data") or {}
+    task_id = data.get("taskId") or data.get("recordId")
+    if not task_id:
+        raise ContentStudioError("kie.ai createTask response did not include taskId")
+    return str(task_id)
+
+
+def kie_record_info(task_id: str, timeout: int) -> dict[str, Any]:
+    payload = http_json("GET", f"{KIE_RECORD_URL}?taskId={task_id}", token=kie_token(), timeout=timeout)
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise ContentStudioError("kie.ai recordInfo response did not include data")
+    return data
+
+
+def result_urls(record: dict[str, Any]) -> list[str]:
+    raw = record.get("resultJson") or {}
+    if isinstance(raw, str):
+        raw = json.loads(raw) if raw.strip() else {}
+    if not isinstance(raw, dict):
+        return []
+    urls = raw.get("resultUrls") or raw.get("urls") or raw.get("images") or []
+    return [str(url) for url in as_list(urls) if clean_text(url)]
+
+
+def safe_image_name(url: str, fallback: str = "kie_image") -> str:
+    parsed = urlparse(url)
+    name = Path(parsed.path).name
+    stem = re.sub(r"[^0-9A-Za-zа-яё._-]+", "_", Path(name).stem, flags=re.IGNORECASE).strip("._-")
+    ext = Path(name).suffix.lower()
+    if ext not in {".png", ".jpg", ".jpeg", ".webp"}:
+        ext = ".png"
+    return f"{stem or fallback}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}"
+
+
+def download_image(url: str, out_dir: Path, filename: str | None = None, timeout: int = 45) -> Path:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    request = Request(url, headers={"User-Agent": "HermesContentStudio/1.0"})
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            content = response.read()
+            content_type = response.headers.get_content_type()
+    except HTTPError as exc:
+        raise ContentStudioError(f"Image download failed with HTTP {exc.code}: {url}") from exc
+    except URLError as exc:
+        raise ContentStudioError(f"Image download failed for {url}: {exc.reason}") from exc
+    if not content:
+        raise ContentStudioError("Downloaded image is empty")
+    if filename:
+        out_file = out_dir / filename
+    else:
+        out_file = out_dir / safe_image_name(url)
+    if out_file.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
+        guessed = mimetypes.guess_extension(content_type) or ".png"
+        out_file = out_file.with_suffix(guessed)
+    out_file.write_bytes(content)
+    return out_file
+
+
+def generate_image(
+    prompt: str,
+    *,
+    aspect_ratio: str,
+    resolution: str | None,
+    poll_interval: float,
+    timeout_seconds: int,
+    request_timeout: int,
+    download: bool,
+    mock_url: str | None,
+) -> dict[str, Any]:
+    prompt = clean_text(prompt)
+    if not prompt:
+        raise ContentStudioError("Image prompt is required")
+    task_id = None
+    if mock_url:
+        urls = [mock_url]
+        state = "mock"
+    else:
+        task_id = kie_create_task(prompt, aspect_ratio, resolution, request_timeout)
+        deadline = time.monotonic() + timeout_seconds
+        last_record: dict[str, Any] = {}
+        while time.monotonic() < deadline:
+            last_record = kie_record_info(task_id, request_timeout)
+            state = clean_text(last_record.get("state")).lower()
+            if state in {"success", "succeeded", "completed", "complete"}:
+                urls = result_urls(last_record)
+                if not urls:
+                    raise ContentStudioError("kie.ai task succeeded but returned no resultUrls")
+                break
+            if state in {"failed", "fail", "error"}:
+                fail_msg = last_record.get("failMsg") or last_record.get("message") or "generation failed"
+                raise ContentStudioError(f"kie.ai task failed: {fail_msg}")
+            time.sleep(poll_interval)
+        else:
+            raise ContentStudioError(f"Timed out waiting for kie.ai task {task_id}")
+
+    image_path = None
+    if download:
+        image_path = str(download_image(urls[0], default_artifact_dir() / "images").resolve())
+    return {
+        "ok": True,
+        "task_id": task_id,
+        "state": state,
+        "image_url": urls[0],
+        "result_urls": urls,
+        "image_path": image_path,
+    }
+
+
+def meta_content(markup: str, name: str) -> str:
+    patterns = [
+        rf'<meta[^>]+name=["\']{re.escape(name)}["\'][^>]+content=["\']([^"\']+)["\']',
+        rf'<meta[^>]+property=["\']{re.escape(name)}["\'][^>]+content=["\']([^"\']+)["\']',
+        rf'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']{re.escape(name)}["\']',
+        rf'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']{re.escape(name)}["\']',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, markup, re.IGNORECASE)
+        if match:
+            return clean_text(html.unescape(match.group(1)))
+    return ""
+
+
+def extract_url(url: str, timeout: int, max_chars: int) -> dict[str, Any]:
+    request = Request(url, headers={"User-Agent": "Mozilla/5.0 HermesContentStudio/1.0"})
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            content_type = response.headers.get_content_type()
+            raw = response.read(2_500_000)
+            charset = response.headers.get_content_charset() or "utf-8"
+    except HTTPError as exc:
+        raise ContentStudioError(f"URL fetch failed with HTTP {exc.code}: {url}") from exc
+    except URLError as exc:
+        raise ContentStudioError(f"URL fetch failed for {url}: {exc.reason}") from exc
+    if "html" not in content_type and "text" not in content_type:
+        raise ContentStudioError(f"Unsupported content type: {content_type}")
+    markup = raw.decode(charset, errors="replace")
+    title_match = re.search(r"<title[^>]*>(.*?)</title>", markup, re.IGNORECASE | re.DOTALL)
+    title = clean_text(html.unescape(title_match.group(1))) if title_match else ""
+    description = meta_content(markup, "description") or meta_content(markup, "og:description")
+    body = SCRIPT_STYLE_RE.sub(" ", markup)
+    body = TAG_RE.sub(" ", body)
+    text = clean_text(html.unescape(body))[:max_chars]
+    source_type = "tilda" if "tilda" in urlparse(url).netloc.lower() or "tilda" in markup[:5000].lower() else "url"
+    return {
+        "ok": True,
+        "url": url,
+        "source_type": source_type,
+        "title": title,
+        "description": description,
+        "text": text,
+        "chars": len(text),
+    }
+
+
+def normalized_versions(spec: dict[str, Any]) -> list[Any]:
+    versions = spec.get("text_versions") or spec.get("versions") or spec.get("texts")
+    versions = as_list(versions)
+    cleaned: list[Any] = []
+    for item in versions:
+        if isinstance(item, dict):
+            text = clean_text(item.get("text") or item.get("body") or item.get("caption"))
+            if text:
+                normalized = dict(item)
+                normalized["text"] = text
+                cleaned.append(normalized)
+        else:
+            text = clean_text(item)
+            if text:
+                cleaned.append(text)
+    if len(cleaned) < 3:
+        raise ContentStudioError("Draft spec must contain at least 3 text_versions")
+    signatures = [json.dumps(item, ensure_ascii=False, sort_keys=True) for item in cleaned]
+    if len(set(signatures[:3])) < 3:
+        raise ContentStudioError("The first 3 text versions must be meaningfully different")
+    if PLACEHOLDER_RE.search("\n".join(signatures)):
+        raise ContentStudioError("Text versions contain placeholder content")
+    return cleaned
+
+
+def normalize_record(spec: dict[str, Any], *, allow_missing_image: bool) -> dict[str, Any]:
+    versions = normalized_versions(spec)
+    topic = clean_text(spec.get("topic") or spec.get("title") or spec.get("product_name") or spec.get("subject"))
+    if not topic:
+        raise ContentStudioError("Draft spec must include topic/title/product_name")
+    image_url = clean_text(spec.get("image_url"))
+    image_path = clean_text(spec.get("image_path"))
+    if not allow_missing_image and not (image_url or image_path):
+        raise ContentStudioError("Draft spec must include image_url or image_path")
+    source_value = clean_text(spec.get("source_value") or spec.get("source_url") or spec.get("url"))
+    source_type = clean_text(spec.get("source_type"))
+    if not source_type:
+        source_type = "tilda" if "tilda" in source_value.lower() else ("url" if source_value else "freeform")
+    selected = spec.get("selected_version") or spec.get("selected")
+    selected_version = int(selected) if selected else 1
+    if selected_version < 1 or selected_version > len(versions):
+        raise ContentStudioError("selected_version must be a 1-based index inside text_versions")
+    return {
+        "source_type": source_type,
+        "source_value": source_value or None,
+        "topic": topic,
+        "product_name": clean_text(spec.get("product_name")) or None,
+        "raw_input": spec.get("raw_input") or {},
+        "status": clean_text(spec.get("status") or "draft"),
+        "text_versions": versions,
+        "selected_version": selected_version,
+        "image_prompt": clean_text(spec.get("image_prompt")) or None,
+        "image_task_id": clean_text(spec.get("image_task_id") or spec.get("task_id")) or None,
+        "image_url": image_url or None,
+        "image_path": image_path or None,
+        "platforms": as_list(spec.get("platforms")),
+        "scheduled_at": clean_text(spec.get("scheduled_at")) or None,
+        "publication_links": spec.get("publication_links") or {},
+        "notes": clean_text(spec.get("notes")) or None,
+    }
+
+
+def db_dsn() -> str | None:
+    return os.environ.get("CONTENT_DATABASE_URL") or os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_DSN")
+
+
+def db_schema() -> str:
+    return os.environ.get("CONTENT_DB_SCHEMA") or "hermes_agent"
+
+
+def db_table() -> str:
+    return os.environ.get("CONTENT_DB_TABLE") or "content_drafts"
+
+
+def psql_command() -> str | None:
+    return os.environ.get("CONTENT_PSQL_COMMAND")
+
+
+def sql_identifier(value: str, kind: str) -> str:
+    if not IDENTIFIER_RE.match(value):
+        raise ContentStudioError(f"Invalid {kind} name: {value!r}")
+    return f'"{value}"'
+
+
+def qualified_content_table() -> str:
+    return f"{sql_identifier(db_schema(), 'schema')}.{sql_identifier(db_table(), 'table')}"
+
+
+def postgres_driver() -> tuple[str, Any] | None:
+    try:
+        import psycopg  # type: ignore
+
+        return ("psycopg", psycopg)
+    except Exception:
+        pass
+    try:
+        import psycopg2  # type: ignore
+
+        return ("psycopg2", psycopg2)
+    except Exception:
+        return None
+
+
+def save_postgres(record: dict[str, Any], dsn: str) -> dict[str, Any]:
+    driver = postgres_driver()
+    if not driver:
+        raise ContentStudioError("Postgres DSN is set, but neither psycopg nor psycopg2 is installed")
+    driver_name, module = driver
+    table = qualified_content_table()
+    sql = f"""
+        INSERT INTO {table} (
+          source_type, source_value, topic, product_name, raw_input, status,
+          text_versions, selected_version, image_prompt, image_task_id,
+          image_url, image_path, platforms, scheduled_at, publication_links, notes
+        )
+        VALUES (
+          %s, %s, %s, %s, %s::jsonb, %s,
+          %s::jsonb, %s, %s, %s,
+          %s, %s, %s::jsonb, %s, %s::jsonb, %s
+        )
+        RETURNING id, status, created_at
+    """
+    params = [
+        record["source_type"],
+        record["source_value"],
+        record["topic"],
+        record["product_name"],
+        json.dumps(record["raw_input"], ensure_ascii=False),
+        record["status"],
+        json.dumps(record["text_versions"], ensure_ascii=False),
+        record["selected_version"],
+        record["image_prompt"],
+        record["image_task_id"],
+        record["image_url"],
+        record["image_path"],
+        json.dumps(record["platforms"], ensure_ascii=False),
+        record["scheduled_at"],
+        json.dumps(record["publication_links"], ensure_ascii=False),
+        record["notes"],
+    ]
+    conn = module.connect(dsn)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            row = cur.fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+    return {
+        "ok": True,
+        "backend": "postgres",
+        "driver": driver_name,
+        "schema": db_schema(),
+        "table": db_table(),
+        "id": row[0],
+        "status": row[1],
+        "created_at": str(row[2]),
+        "topic": record["topic"],
+    }
+
+
+def sql_literal(value: Any, *, cast: str | None = None) -> str:
+    if value is None:
+        return "NULL"
+    text = str(value).replace("'", "''")
+    suffix = f"::{cast}" if cast else ""
+    return f"'{text}'{suffix}"
+
+
+def json_literal(value: Any) -> str:
+    return sql_literal(json.dumps(value, ensure_ascii=False), cast="jsonb")
+
+
+def save_psql(record: dict[str, Any], command: str) -> dict[str, Any]:
+    table = qualified_content_table()
+    scheduled = sql_literal(record["scheduled_at"], cast="timestamptz") if record["scheduled_at"] else "NULL"
+    sql = f"""
+INSERT INTO {table} (
+  source_type, source_value, topic, product_name, raw_input, status,
+  text_versions, selected_version, image_prompt, image_task_id,
+  image_url, image_path, platforms, scheduled_at, publication_links, notes
+)
+VALUES (
+  {sql_literal(record["source_type"])},
+  {sql_literal(record["source_value"])},
+  {sql_literal(record["topic"])},
+  {sql_literal(record["product_name"])},
+  {json_literal(record["raw_input"])},
+  {sql_literal(record["status"])},
+  {json_literal(record["text_versions"])},
+  {int(record["selected_version"])},
+  {sql_literal(record["image_prompt"])},
+  {sql_literal(record["image_task_id"])},
+  {sql_literal(record["image_url"])},
+  {sql_literal(record["image_path"])},
+  {json_literal(record["platforms"])},
+  {scheduled},
+  {json_literal(record["publication_links"])},
+  {sql_literal(record["notes"])}
+)
+RETURNING id, status, created_at;
+"""
+    args = shlex.split(command)
+    if not args:
+        raise ContentStudioError("CONTENT_PSQL_COMMAND is empty")
+    proc = subprocess.run(args, input=sql, text=True, encoding="utf-8", capture_output=True, timeout=30)
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout).strip()
+        raise ContentStudioError(f"psql save failed: {detail[:800]}")
+    lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    row_lines = [line for line in lines if "|" in line]
+    if not row_lines:
+        raise ContentStudioError("psql save returned no row")
+    row = row_lines[-1].split("|")
+    if len(row) < 3:
+        raise ContentStudioError(f"Unexpected psql output: {lines[-1]}")
+    return {
+        "ok": True,
+        "backend": "postgres",
+        "driver": "psql",
+        "schema": db_schema(),
+        "table": db_table(),
+        "id": int(row[0]),
+        "status": row[1],
+        "created_at": row[2],
+        "topic": record["topic"],
+    }
+
+
+def save_jsonl(record: dict[str, Any]) -> dict[str, Any]:
+    out_dir = default_artifact_dir()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    local_id = f"local-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
+    payload = {"id": local_id, "created_at": now_iso(), **record}
+    path = out_dir / "content_drafts.jsonl"
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    return {
+        "ok": True,
+        "backend": "jsonl-fallback",
+        "id": local_id,
+        "path": str(path.resolve()),
+        "topic": record["topic"],
+        "warning": "Postgres was not used. Set CONTENT_DATABASE_URL with psycopg/psycopg2, or CONTENT_PSQL_COMMAND for psql-based writes.",
+    }
+
+
+def save_draft(spec: dict[str, Any], *, require_postgres: bool, allow_missing_image: bool) -> dict[str, Any]:
+    record = normalize_record(spec, allow_missing_image=allow_missing_image)
+    dsn = db_dsn()
+    if dsn:
+        return save_postgres(record, dsn)
+    command = psql_command()
+    if command:
+        return save_psql(record, command)
+    if require_postgres:
+        raise ContentStudioError("CONTENT_DATABASE_URL/DATABASE_URL or CONTENT_PSQL_COMMAND is required for Postgres save")
+    return save_jsonl(record)
+
+
+def default_image_prompt(spec: dict[str, Any]) -> str:
+    topic = clean_text(spec.get("topic") or spec.get("title") or spec.get("product_name"))
+    raw = clean_text(spec.get("raw_input") or spec.get("source_summary") or "")
+    if not topic:
+        raise ContentStudioError("image_prompt is missing and topic/title is empty")
+    return (
+        f"Create a clean social media visual for the topic: {topic}. "
+        f"Use a modern commercial style, clear composition, no text overlays. {raw}"
+    )[:20000]
+
+
+def cmd_extract_url(args: argparse.Namespace) -> int:
+    print_json(extract_url(args.url, args.timeout, args.max_chars))
+    return 0
+
+
+def cmd_generate_image(args: argparse.Namespace) -> int:
+    print_json(
+        generate_image(
+            args.prompt,
+            aspect_ratio=args.aspect_ratio,
+            resolution=args.resolution,
+            poll_interval=args.poll_interval,
+            timeout_seconds=args.timeout_seconds,
+            request_timeout=args.request_timeout,
+            download=not args.no_download,
+            mock_url=args.mock_url,
+        )
+    )
+    return 0
+
+
+def cmd_save_draft(args: argparse.Namespace) -> int:
+    spec = load_json(args.spec)
+    print_json(
+        save_draft(
+            spec,
+            require_postgres=args.require_postgres,
+            allow_missing_image=args.allow_missing_image,
+        )
+    )
+    return 0
+
+
+def cmd_prepare(args: argparse.Namespace) -> int:
+    spec = load_json(args.spec)
+    image_result = None
+    if args.generate_image or args.mock_url:
+        prompt = clean_text(spec.get("image_prompt")) or default_image_prompt(spec)
+        image_result = generate_image(
+            prompt,
+            aspect_ratio=args.aspect_ratio,
+            resolution=args.resolution,
+            poll_interval=args.poll_interval,
+            timeout_seconds=args.timeout_seconds,
+            request_timeout=args.request_timeout,
+            download=not args.no_download,
+            mock_url=args.mock_url,
+        )
+        spec["image_prompt"] = prompt
+        spec["image_url"] = image_result["image_url"]
+        spec["image_path"] = image_result["image_path"]
+        spec["image_task_id"] = image_result["task_id"]
+    draft_result = None
+    if args.save:
+        draft_result = save_draft(
+            spec,
+            require_postgres=args.require_postgres,
+            allow_missing_image=args.allow_missing_image,
+        )
+    print_json({"ok": True, "image": image_result, "draft": draft_result, "spec": spec})
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Hermes content studio helper")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    extract = sub.add_parser("extract-url", help="Fetch an HTML/Tilda page and extract usable text")
+    extract.add_argument("url")
+    extract.add_argument("--timeout", type=int, default=25)
+    extract.add_argument("--max-chars", type=int, default=8000)
+    extract.set_defaults(func=cmd_extract_url)
+
+    image = sub.add_parser("generate-image", help="Generate and optionally download an image through kie.ai")
+    image.add_argument("--prompt", required=True)
+    image.add_argument("--aspect-ratio", default="1:1")
+    image.add_argument("--resolution", choices=["1K", "2K", "4K"], default=None)
+    image.add_argument("--poll-interval", type=float, default=5.0)
+    image.add_argument("--timeout-seconds", type=int, default=240)
+    image.add_argument("--request-timeout", type=int, default=45)
+    image.add_argument("--no-download", action="store_true")
+    image.add_argument("--mock-url", help="Testing only: skip kie.ai and use this URL")
+    image.set_defaults(func=cmd_generate_image)
+
+    save = sub.add_parser("save-draft", help="Save an already prepared draft")
+    save.add_argument("--spec", required=True)
+    save.add_argument("--require-postgres", action="store_true")
+    save.add_argument("--allow-missing-image", action="store_true")
+    save.set_defaults(func=cmd_save_draft)
+
+    prepare = sub.add_parser("prepare", help="Optionally generate image and save the content draft")
+    prepare.add_argument("--spec", required=True)
+    prepare.add_argument("--generate-image", action="store_true")
+    prepare.add_argument("--mock-url", help="Testing only: skip kie.ai and use this URL")
+    prepare.add_argument("--save", action="store_true")
+    prepare.add_argument("--require-postgres", action="store_true")
+    prepare.add_argument("--allow-missing-image", action="store_true")
+    prepare.add_argument("--aspect-ratio", default="1:1")
+    prepare.add_argument("--resolution", choices=["1K", "2K", "4K"], default=None)
+    prepare.add_argument("--poll-interval", type=float, default=5.0)
+    prepare.add_argument("--timeout-seconds", type=int, default=240)
+    prepare.add_argument("--request-timeout", type=int, default=45)
+    prepare.add_argument("--no-download", action="store_true")
+    prepare.set_defaults(func=cmd_prepare)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        raise SystemExit(1)

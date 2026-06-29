@@ -118,20 +118,24 @@ API-доки клиента (в git, без секретов): `kie_ai_api.txt`,
 
 ---
 
-## 5. Текущий статус (на 2026-06-28)
+## 5. Текущий статус (на 2026-06-29)
 
-**Закрыто 3 из 8 этапов** (теги `stage-0-done`, `stage-1-done`, `stage-2-done`):
+**Закрыто 4 из 8 этапов** (теги `stage-0-done`, `stage-1-done`, `stage-2-done`, `stage-3-done`):
 - ✅ **0 — Каркас**: hermes установлен, бот отвечает в Telegram.
 - ✅ **1 — Живой мозг**: текст (DeepSeek), голос (Groq STT), фото (OpenRouter vision), вывод кода,
   стиль «кореш/друг».
 - ✅ **2 — Долгосрочная память**: встроенная файловая, сохранение + recall работают.
+- ✅ **3 — Код и тексты**: `business-documents` генерирует `.docx` КП и `.csv` отчёты, Telegram UAT
+  подтверждён.
 
-**Сейчас — этап 3** (в работе): навык «код и тексты» — генерация **.docx (КП)** и **.csv (отчёты)**
-с отправкой файлом в Telegram. Уже добавлен локальный skill `business-documents`; этап ждёт живой
-проверки в Telegram, поэтому чекбоксы и тег `stage-3-done` пока не ставить.
+**Сейчас — этап 4** (в работе): навык «контент» — свободное описание/ссылка/Tilda → 3 версии текста
+и картинка через kie.ai → превью → сохранение черновика в Postgres. Уже добавлен локальный skill
+`content-studio`, миграция `migrations/0001_content_drafts.sql` применена в локальной Docker-БД
+`mydb`, схема `hermes_agent`, таблица `content_drafts`; тестовая запись helper вернула draft `id=2`.
+Этап НЕ закрыт: ещё нужна живая Telegram-проверка с реальным kie.ai и превью.
 
-**Осталось**: этапы 3, 4 (контент: текст+картинка через kie.ai + Postgres-таблица), 5 (PostMyPost),
-6 (cron-автопостинг), 7 (деплой на VPS). Детали и критерии — в `docs/07_ROADMAP.md`.
+**Осталось**: завершить stage 4, затем 5 (PostMyPost), 6 (cron-автопостинг), 7 (деплой на VPS).
+Детали и критерии — в `docs/07_ROADMAP.md`.
 
 Всегда сверяй этот раздел с реальным `docs/STATUS.md` — он актуальнее.
 
@@ -180,6 +184,19 @@ API-доки клиента (в git, без секретов): `kie_ai_api.txt`,
   `%LOCALAPPDATA%\hermes\skills\productivity\business-documents\`. После правки/установки skill
   перезапускай **только gateway**, иначе Telegram может жить со старым skill-index. Dashboard можно
   не трогать. Проверка: `hermes chat -q "Загрузи skill business-documents через skill_view..." -Q --max-turns 3`.
+- **Stage-4 skill `content-studio`.** Исходник:
+  `hermes-skills/marketing/content-studio/`; установленная копия:
+  `%LOCALAPPDATA%\hermes\skills\marketing\content-studio\`. Helper `scripts/content_studio.py`
+  умеет `extract-url`, `generate-image`, `save-draft`, `prepare`. Для локального Docker Postgres без
+  Python-драйвера используй:
+  `CONTENT_PSQL_COMMAND=docker exec -i postgres16 psql -U postgres -d mydb -At -v ON_ERROR_STOP=1`.
+- **Контент-таблица stage 4.** Локально Postgres в Docker: контейнер `postgres16`, БД `mydb`,
+  отдельная схема проекта `hermes_agent`, таблица `content_drafts`. Миграция:
+  `migrations/0001_content_drafts.sql`. Не пиши таблицы stage 4 в `public`, там могут быть другие проекты.
+- **Локальный Hermes venv сейчас сломан.** `hermes --version` и полный путь к `hermes.exe` падают с
+  `No Python at "C:\Users\GigaChat\AppData\Local\Programs\Python\Python311\python.exe"`. Перед живой
+  Telegram-проверкой stage 4 нужно починить/переустановить Hermes venv или опереться на уже запущенный
+  gateway, если он ещё работает.
 - **Hermes `platforms` во frontmatter.** Не добавляй `platforms: [linux, macos, windows]` в локальные
   skills без проверки: в текущем Hermes это распарсилось как строка и `skill_view` вернул
   `Skill 'business-documents' is not supported on this platform`. Если OS-gate не нужен — лучше

@@ -6,7 +6,7 @@
 
 **Последнее обновление**: 2026-06-29 (этап 4 взят в работу)
 **Текущий этап**: Этап 4 — Навык «контент»: текст + картинка (гибко) (🚧 в работе)
-**Следующий шаг**: реализовать контент-таблицу, skill подготовки 3 версий текста, обёртку kie.ai и сохранение черновика с id.
+**Следующий шаг**: починить локальный запуск `hermes.exe`/gateway, затем провести живую Telegram-проверку `content-studio`: свободное описание → 3 текста + kie.ai-картинка + сохранение draft id.
 
 ---
 
@@ -29,7 +29,7 @@
 
 ## Активная работа
 
-Этап 4 взят в работу. Цель текущей итерации: добавить локальный Hermes skill для подготовки контента, спроектировать Postgres-таблицу черновиков, подключить helper для kie.ai (`createTask` → `recordInfo`) и научить агента показывать превью из 3 текстов + картинки, сохраняя выбранный вариант в контент-таблицу.
+Этап 4 в работе. Добавлен локальный Hermes skill `content-studio`: исходник `hermes-skills/marketing/content-studio`, установленная копия `%LOCALAPPDATA%\hermes\skills\marketing\content-studio`. Добавлена миграция `migrations/0001_content_drafts.sql`; она применена в локальный Docker Postgres `postgres16` / БД `mydb`, схема `hermes_agent`, таблица `content_drafts`. Helper `content_studio.py` поддерживает URL/Tilda extraction, kie.ai (`createTask` → `recordInfo` → download), сохранение draft в Postgres через Python-драйвер или `CONTENT_PSQL_COMMAND`, и JSONL fallback для dev. Проверено без живого kie.ai: mock image path contract работает; реальная запись через `CONTENT_PSQL_COMMAND='docker exec -i postgres16 psql -U postgres -d mydb -At -v ON_ERROR_STOP=1'` вернула Postgres draft `id=2`.
 
 **Запущенные локальные процессы** (dev-окружение):
 - `hermes gateway` — Telegram-бот `@NEIRO_BRAIN01_BOT` (polling). Лог: `%LOCALAPPDATA%\hermes\logs\gateway.log`.
@@ -40,6 +40,7 @@
 
 - **PostMyPost (на будущее, этап 5)**: клиент оплачивает тариф «Продвинутый 5» (1490₽/мес) — нужен активный аккаунт для теста публикации.
 - **Прод-ключ OpenRouter (этап 7)**: сейчас стоит dev-ключ Анастасии; на прод нужен инференс-ключ с аккаунта клиента.
+- **Локальный `hermes.exe`**: CLI сейчас падает с `No Python at "C:\Users\GigaChat\AppData\Local\Programs\Python\Python311\python.exe"` — venv Hermes ссылается на отсутствующий Python 3.11. Для живой Telegram-проверки stage 4 нужно починить/переустановить hermes venv или использовать уже запущенный gateway, если он ещё жив.
 
 _Архитектурное правило (актуально для всех этапов): сервер 1 ядро/1 ГБ → никакого локального инференса. STT=Groq API, vision=OpenRouter API (решено и внедрено на этапе 1)._
 
