@@ -108,14 +108,22 @@ publication skill/stage.
 
 3. Choose the image strategy. Two modes:
 
-   **Mode A — product photos from a link (image-to-image).** Preferred when the source is a URL/Tilda
-   product page and `extract-url` returned `images`. This is the client's "Вариант 3": take the first
-   one or two product photos and extend/clean their background ("дорисовывает фон, обрезает") instead
-   of inventing a picture. Pass each photo URL with `--input-url` (helper switches to
-   `gpt-image-2-image-to-image`). Prompt example (RU): «Расширь и дорисуй чистый минималистичный фон
-   вокруг товара, мягкий студийный свет, товар не менять, профессиональное фото для соцсетей». Keep the
-   real product intact — do not add text overlays in this mode. Generate the first two photos when the
-   page has them.
+   **Mode A — social product card from the link's photos (image-to-image).** Preferred when the source
+   is a URL/Tilda product page and `extract-url` returned `images`. This is the client's "Вариант 3":
+   "генерация двух первых картинок из ссылки" means turning the first one or two product photos into
+   ready-to-post **product cards**, not just reusing the raw photos or only extending the background
+   (that adds almost nothing). Take each of the first 1–2 photos via `--input-url` (helper switches to
+   `gpt-image-2-image-to-image`) and compose a clean social card:
+   - Keep the real product unchanged — it is the actual item being sold.
+   - Place it on a clean, premium, minimalist background; soft studio light; square `1:1` for the feed.
+   - Add a large readable Russian headline = the product name (from the page title), plus an optional
+     short subtitle. image-to-image renders Cyrillic reliably here, unlike from-scratch covers.
+   - Generate two cards when the page has two photos (call `generate-image` once per photo).
+
+   Prompt example (RU): «Сделай из этого фото карточку товара для Instagram. Сохрани реальный товар без
+   изменений, помести на чистый светлый минималистичный студийный фон. Сверху крупный читаемый русский
+   заголовок "<НАЗВАНИЕ ТОВАРА>". Снизу помельче "<короткая подпись>". Премиальная подача, мягкий свет,
+   квадратная композиция, без лишних деталей.»
 
    **Mode B — cover from scratch (text-to-image).** Use for free-form briefs with no usable product
    photo. Build a YouTube-thumbnail-style cover with on-image Russian text. Wrap your concrete visual
@@ -131,8 +139,8 @@ publication skill/stage.
    Completion: Mode A has 1–2 product photo URLs ready, or Mode B has a cover prompt with a clear headline.
 
 4. Generate the image(s) through kie.ai.
-   - Mode A: `generate-image --prompt "<background brief>" --input-url <photo1> [--input-url <photo2-for-one-combined>]`.
-     For two separate product shots, call `generate-image` once per photo. Aspect ratio `auto` or `1:1`.
+   - Mode A: `generate-image --prompt "<card prompt with product name>" --input-url <photo1>`.
+     Call `generate-image` once per photo to get two separate cards. Aspect ratio `1:1` for the feed.
    - Mode B: `generate-image --prompt "<cover prompt>"` or `prepare --generate-image` (text-to-image).
    - The helper calls `createTask`, polls `recordInfo`, downloads the first result URL, and reports the `model`.
    Completion: result JSON has `image_url` and preferably `image_path` for each image.
@@ -168,11 +176,11 @@ Image generation — Mode B, text-to-image cover:
 python scripts/content_studio.py generate-image --prompt "..." --aspect-ratio 16:9
 ```
 
-Image edit — Mode A, image-to-image (background fill/crop of a real product photo):
+Image edit — Mode A, image-to-image (social product card from a real product photo):
 
 ```bash
 python scripts/content_studio.py generate-image \
-  --prompt "Расширь и дорисуй чистый фон вокруг товара, студийный свет, товар не менять" \
+  --prompt "Сделай карточку товара для Instagram: сохрани реальный товар, чистый светлый студийный фон, сверху крупный заголовок \"УТРЕННЯЯ ЗОЛА\", снизу \"Керамика ручной работы\"" \
   --input-url "https://static.tildacdn.com/stor.../photo.jpg" --aspect-ratio 1:1
 ```
 
@@ -317,7 +325,7 @@ Use the exact `id`, `image_url`, and `image_path` returned by the helper.
 - [ ] Free-form brief produces 3 distinct Russian text versions.
 - [ ] URL/Tilda extraction returns page title/description/text and the final texts reflect the page.
 - [ ] URL/Tilda extraction returns `images` (product photos, no logos/favicons).
-- [ ] Mode A: image-to-image on a product photo (`--input-url`) extends/cleans the background, product intact.
+- [ ] Mode A: image-to-image turns a product photo (`--input-url`) into a social card — real product, clean background, Russian headline.
 - [ ] Mode B: text-to-image cover returns an image URL and the helper downloads a local file.
 - [ ] `save-draft --require-postgres` returns `backend: "postgres"` and an integer draft id.
 - [ ] Telegram preview includes 3 texts and the generated image.
