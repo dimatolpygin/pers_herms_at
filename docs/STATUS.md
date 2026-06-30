@@ -4,9 +4,9 @@
 > прочтения **обязательно** сверить с реальностью: `git tag -l "stage-*"`,
 > `git log --oneline -20` — таблица ниже может быть устаревшей.
 
-**Последнее обновление**: 2026-06-29 (этап 4 взят в работу)
+**Последнее обновление**: 2026-07-01 (этап 4: починен баг с секретами в песочнице)
 **Текущий этап**: Этап 4 — Навык «контент»: текст + картинка (гибко) (🚧 в работе)
-**Следующий шаг**: провести живую Telegram-проверку `content-studio` человеком: свободное описание → 3 текста + kie.ai-картинка в превью + сохранение draft id; после подтверждения отметить ROADMAP и закрыть stage 4.
+**Следующий шаг**: провести живую Telegram-проверку `content-studio` человеком: свободное описание → 3 текста + kie.ai-картинка в превью + сохранение draft id; после подтверждения отметить ROADMAP и закрыть stage 4. **Перед проверкой перезапустить gateway**, чтобы навык перечитал обновлённый фронтматтер (env passthrough).
 
 ---
 
@@ -30,6 +30,8 @@
 ## Активная работа
 
 Этап 4 в работе. Добавлен локальный Hermes skill `content-studio`: исходник `hermes-skills/marketing/content-studio`, установленная копия `%LOCALAPPDATA%\hermes\skills\marketing\content-studio`. Добавлена миграция `migrations/0001_content_drafts.sql`; она применена в локальный Docker Postgres `postgres16` / БД `mydb`, схема `hermes_agent`, таблица `content_drafts`. Helper `content_studio.py` поддерживает URL/Tilda extraction, kie.ai (`createTask` → `recordInfo` → download), сохранение draft в Postgres через Python-драйвер или `CONTENT_PSQL_COMMAND`, и JSONL fallback для dev. Проверено: mock image path contract работает; запись через `CONTENT_PSQL_COMMAND='docker exec -i postgres16 psql -U postgres -d mydb -At -v ON_ERROR_STOP=1'` вернула Postgres draft `id=2`; реальный helper `prepare --generate-image --save --require-postgres` вернул task `d2471fea927171559ff5b621c732dca5`, скачал картинку в `%LOCALAPPDATA%\hermes\artifacts\content-studio\images\file_00000000b768722f9785e46634905438_20260629_233050.png` и сохранил draft `id=3`; агентный CLI UAT через `hermes chat --skills content-studio` сделал 3 текста, сгенерировал kie.ai картинку `%LOCALAPPDATA%\hermes\artifacts\content-studio\images\file_000000009e7471fd8b551bba92eff922_20260629_234019.png` и сохранил draft `id=4` (session `20260629_233600_4dd743`). ROADMAP stage 4 пока без `[x]`, потому что нужна живая Telegram-проверка человеком.
+
+**2026-07-01 — найден и починен баг живого Telegram-прогона.** В логе Kira (29.06 23:58) агент в Telegram не смог сгенерировать картинку: «в sandbox нет переменной KIE». Корень: `execute_code` (рекомендованный путь самого навыка) использует скрабер `_scrub_child_env`, который режет любое имя с `KEY/DSN/TOKEN`, если навык не объявил его в `required_environment_variables` (защита GHSA-rhgp-j443-p4rf). В CLI-тестах не воспроизводилось, т.к. переменные экспортировались вручную. Фикс (commit `4174cc3`): в фронтматтер `content-studio/SKILL.md` добавлены `required_environment_variables` (KIE_AI_API_KEY + CONTENT_PSQL_COMMAND/CONTENT_DATABASE_URL/CONTENT_DB_SCHEMA/CONTENT_DB_TABLE, все `optional`). Проверено прогоном реальной логики Hermes: ключи теперь доходят до песочницы `execute_code`, а `OPENROUTER/GROQ` по-прежнему режутся. Текущий gateway (PID старт 01.07 00:23) уже держит KIE в `os.environ`; для подхвата нового фронтматтера достаточно перезапустить gateway. Постинга (этапы 5–6) в проекте нет — Codex их не делал.
 
 **Запущенные локальные процессы** (dev-окружение):
 - `hermes gateway` — Telegram-бот `@NEIRO_BRAIN01_BOT` (polling). Лог: `%LOCALAPPDATA%\hermes\logs\gateway.log`.
