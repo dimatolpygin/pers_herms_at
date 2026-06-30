@@ -48,13 +48,16 @@ Image generation requires one of:
 - `KIE_API_KEY`
 - `KIE_TOKEN`
 
-Postgres saving uses:
+Postgres saving uses, in priority order:
 
-- `CONTENT_DATABASE_URL` first, then `DATABASE_URL`, then `POSTGRES_DSN`.
+- `CONTENT_DATABASE_URL` first, then `DATABASE_URL`, then `POSTGRES_DSN` (requires psycopg/psycopg2).
+- `CONTENT_PSQL_COMMAND` — the **primary Postgres path in this project** (no Python driver needed).
+  For local Docker: `docker exec -i postgres16 psql -U postgres -d mydb -At -v ON_ERROR_STOP=1`.
+  When this is set, the helper writes to real Postgres through it. Do NOT report "no database /
+  database unavailable" just because `CONTENT_DATABASE_URL` or `psycopg` is absent — `CONTENT_PSQL_COMMAND`
+  IS the database connection here. Trust the helper's `backend` field, not your own env probing.
 - `CONTENT_DB_SCHEMA` optional; default is `hermes_agent`.
 - `CONTENT_DB_TABLE` optional; default is `content_drafts`.
-- `CONTENT_PSQL_COMMAND` optional fallback when Python has no Postgres driver. For local Docker:
-  `docker exec -i postgres16 psql -U postgres -d mydb -At -v ON_ERROR_STOP=1`.
 - `CONTENT_STUDIO_ARTIFACT_DIR` optional; overrides the local artifact directory for images and JSONL fallback.
 
 The project migration creates `hermes_agent.content_drafts`. Use a dedicated schema because the
@@ -120,8 +123,13 @@ publication skill/stage.
 6. Save the draft.
    - If the user already selected a version, set `selected_version`.
    - If not, save `selected_version: 1` only when the user asked to save immediately; otherwise ask.
-   - Run `save-draft` or `prepare --save`.
-   Completion: final answer includes the saved draft id.
+   - Run `save-draft` or `prepare --save` **with `--require-postgres`** for this project, so the
+     helper never silently degrades to the JSONL fallback. If the save fails, surface the real error
+     instead of switching to JSONL on your own.
+   - Read `backend` and `id` from the helper's JSON output and report them as-is. `backend: "postgres"`
+     means it is saved in the database (whether via DSN or `CONTENT_PSQL_COMMAND`). Never announce
+     "база недоступна / JSONL" unless the helper actually returned `backend: "jsonl-fallback"`.
+   Completion: final answer includes the saved draft id and the real backend.
 
 ## Helper Commands
 
