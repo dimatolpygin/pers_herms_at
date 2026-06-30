@@ -1,9 +1,24 @@
 ---
 name: content-studio
 description: Use when the user asks to prepare a social-media post, ad caption, promo content, or content draft from a free-form brief or URL/Tilda page, with 3 text versions, a generated image through kie.ai, and a saved content draft id.
-version: 1.0.0
+version: 1.1.0
 author: Hermes Agent Project
 license: MIT
+required_environment_variables:
+  - name: KIE_AI_API_KEY
+    optional: true
+    prompt: kie.ai API key for gpt-image-2 generation
+    help: https://kie.ai
+  - name: CONTENT_PSQL_COMMAND
+    optional: true
+    prompt: psql command for saving drafts to local Postgres
+  - name: CONTENT_DATABASE_URL
+    optional: true
+    prompt: Postgres DSN for content drafts (alternative to CONTENT_PSQL_COMMAND)
+  - name: CONTENT_DB_SCHEMA
+    optional: true
+  - name: CONTENT_DB_TABLE
+    optional: true
 metadata:
   hermes:
     tags: [content, social-media, kie-ai, postgres, telegram]
@@ -44,6 +59,15 @@ Postgres saving uses:
 
 The project migration creates `hermes_agent.content_drafts`. Use a dedicated schema because the
 local Docker Postgres database is shared with other projects.
+
+These variables are declared in this skill's `required_environment_variables` frontmatter so they
+pass through to the `execute_code` / terminal sandboxes (otherwise Hermes strips any name
+containing `KEY`/`DSN`/`TOKEN`). Two operational rules follow from that:
+
+- The values are read from the running gateway's environment, which is loaded from
+  `%LOCALAPPDATA%\hermes\.env` **at startup**. After editing `.env`, restart the gateway — a
+  stale gateway will not expose `KIE_AI_API_KEY` to the sandbox even though the skill declares it.
+- Passthrough only registers a variable that is actually set; missing ones are simply skipped.
 
 If no Postgres DSN or `CONTENT_PSQL_COMMAND` is configured, the helper writes a local JSONL
 fallback under Hermes artifacts. This is only for dev flow checks; stage 4 acceptance requires a
