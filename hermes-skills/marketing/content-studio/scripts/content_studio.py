@@ -392,6 +392,32 @@ def normalized_versions(spec: dict[str, Any]) -> list[Any]:
     return cleaned
 
 
+def normalize_images(spec: dict[str, Any], image_url: str, image_path: str) -> list[dict[str, Any]]:
+    """Ordered gallery for the post: card first, then any raw photos.
+
+    Accepts spec["images"] as a list of URLs or {role,url,path} objects. Falls
+    back to the single primary image_url/image_path when no gallery is given.
+    """
+    items: list[dict[str, Any]] = []
+    for entry in as_list(spec.get("images")):
+        if isinstance(entry, dict):
+            url = clean_text(entry.get("url") or entry.get("image_url"))
+            path = clean_text(entry.get("path") or entry.get("image_path"))
+            role = clean_text(entry.get("role")) or None
+            if url or path:
+                obj: dict[str, Any] = {"url": url or None, "path": path or None}
+                if role:
+                    obj["role"] = role
+                items.append(obj)
+        else:
+            url = clean_text(entry)
+            if url:
+                items.append({"url": url, "path": None})
+    if not items and (image_url or image_path):
+        items.append({"role": "card", "url": image_url or None, "path": image_path or None})
+    return items
+
+
 def normalize_record(spec: dict[str, Any], *, allow_missing_image: bool) -> dict[str, Any]:
     versions = normalized_versions(spec)
     topic = clean_text(spec.get("topic") or spec.get("title") or spec.get("product_name") or spec.get("subject"))
@@ -422,6 +448,7 @@ def normalize_record(spec: dict[str, Any], *, allow_missing_image: bool) -> dict
         "image_task_id": clean_text(spec.get("image_task_id") or spec.get("task_id")) or None,
         "image_url": image_url or None,
         "image_path": image_path or None,
+        "images": normalize_images(spec, image_url, image_path),
         "platforms": as_list(spec.get("platforms")),
         "scheduled_at": clean_text(spec.get("scheduled_at")) or None,
         "publication_links": spec.get("publication_links") or {},
@@ -480,12 +507,12 @@ def save_postgres(record: dict[str, Any], dsn: str) -> dict[str, Any]:
         INSERT INTO {table} (
           source_type, source_value, topic, product_name, raw_input, status,
           text_versions, selected_version, image_prompt, image_task_id,
-          image_url, image_path, platforms, scheduled_at, publication_links, notes
+          image_url, image_path, images, platforms, scheduled_at, publication_links, notes
         )
         VALUES (
           %s, %s, %s, %s, %s::jsonb, %s,
           %s::jsonb, %s, %s, %s,
-          %s, %s, %s::jsonb, %s, %s::jsonb, %s
+          %s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s
         )
         RETURNING id, status, created_at
     """
@@ -502,6 +529,7 @@ def save_postgres(record: dict[str, Any], dsn: str) -> dict[str, Any]:
         record["image_task_id"],
         record["image_url"],
         record["image_path"],
+        json.dumps(record["images"], ensure_ascii=False),
         json.dumps(record["platforms"], ensure_ascii=False),
         record["scheduled_at"],
         json.dumps(record["publication_links"], ensure_ascii=False),
@@ -547,7 +575,7 @@ def save_psql(record: dict[str, Any], command: str) -> dict[str, Any]:
 INSERT INTO {table} (
   source_type, source_value, topic, product_name, raw_input, status,
   text_versions, selected_version, image_prompt, image_task_id,
-  image_url, image_path, platforms, scheduled_at, publication_links, notes
+  image_url, image_path, images, platforms, scheduled_at, publication_links, notes
 )
 VALUES (
   {sql_literal(record["source_type"])},
@@ -562,6 +590,7 @@ VALUES (
   {sql_literal(record["image_task_id"])},
   {sql_literal(record["image_url"])},
   {sql_literal(record["image_path"])},
+  {json_literal(record["images"])},
   {json_literal(record["platforms"])},
   {scheduled},
   {json_literal(record["publication_links"])},

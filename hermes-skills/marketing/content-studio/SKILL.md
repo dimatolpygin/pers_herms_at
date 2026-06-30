@@ -154,11 +154,14 @@ publication skill/stage.
 
 5. Preview in chat.
    - Show the 3 versions as numbered options.
-   - Include the generated image. On Telegram, add `MEDIA:<absolute image_path>` when `image_path` exists.
+   - Include every post image. On Telegram, add one `MEDIA:<absolute image_path>` line per image — in
+     Mode A that is the generated card first, then the raw photo 2. Use `image_path` when present.
    - Ask which version to save/publish later if the user has not selected one.
-   Completion: the user can see the options and image.
+   Completion: the user can see the options and all post images.
 
 6. Save the draft.
+   - Put the full ordered post gallery in `images` (Mode A: `[{role:"card",...},{role:"raw",url:photo2}]`).
+     Keep the primary `image_url`/`image_path` = the main/card image.
    - If the user already selected a version, set `selected_version`.
    - If not, save `selected_version: 1` only when the user asked to save immediately; otherwise ask.
    - Run `save-draft` or `prepare --save` **with `--require-postgres`** for this project, so the
@@ -271,12 +274,17 @@ Required fields:
   "image_prompt": "Prompt for kie.ai",
   "image_url": "https://...",
   "image_path": "C:\\Users\\...\\image.png",
+  "images": [
+    {"role": "card", "url": "https://.../card.png", "path": "C:\\Users\\...\\card.png"},
+    {"role": "raw", "url": "https://static.tildacdn.com/stor.../photo2.jpg"}
+  ],
   "platforms": ["instagram"],
   "scheduled_at": null
 }
 ```
 
-`image_url`/`image_path` may be filled by `prepare --generate-image`.
+`image_url`/`image_path` may be filled by `prepare --generate-image`. `images` is the ordered post
+gallery (Mode A: generated card + raw photo 2); when omitted it defaults to the single primary image.
 
 ## Output Contract
 
