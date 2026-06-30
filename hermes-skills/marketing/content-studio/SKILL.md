@@ -1,7 +1,7 @@
 ---
 name: content-studio
 description: Use when the user asks to prepare a social-media post, ad caption, promo content, or content draft from a free-form brief or URL/Tilda page, with 3 text versions, a generated image through kie.ai, and a saved content draft id.
-version: 1.1.0
+version: 1.2.0
 author: Hermes Agent Project
 license: MIT
 required_environment_variables:
@@ -92,7 +92,9 @@ publication skill/stage.
 
 1. Understand the source.
    - Free-form brief: extract topic, product/service, target audience, offer, tone, platform, and CTA.
-   - URL/Tilda: call `extract-url` first, then summarize the useful page substance.
+   - URL/Tilda: call `extract-url` first, then summarize the useful page substance. `extract-url` also
+     returns an `images` list — the page's product photos (og:image first; Tilda logos/favicons are
+     filtered out). Keep the first one or two image URLs for the image step.
    - If the brief is too sparse to produce a meaningful post, ask one focused follow-up.
    Completion: enough data exists to draft the post.
 
@@ -104,8 +106,20 @@ publication skill/stage.
    - Keep platform constraints in mind if the user named a platform.
    Completion: 3 clearly different versions are ready.
 
-3. Build the image prompt as a YouTube-thumbnail-style cover (text ON the image, in Russian).
-   Wrap your concrete visual brief in this exact template — keep the wording, replace only the inner `...`:
+3. Choose the image strategy. Two modes:
+
+   **Mode A — product photos from a link (image-to-image).** Preferred when the source is a URL/Tilda
+   product page and `extract-url` returned `images`. This is the client's "Вариант 3": take the first
+   one or two product photos and extend/clean their background ("дорисовывает фон, обрезает") instead
+   of inventing a picture. Pass each photo URL with `--input-url` (helper switches to
+   `gpt-image-2-image-to-image`). Prompt example (RU): «Расширь и дорисуй чистый минималистичный фон
+   вокруг товара, мягкий студийный свет, товар не менять, профессиональное фото для соцсетей». Keep the
+   real product intact — do not add text overlays in this mode. Generate the first two photos when the
+   page has them.
+
+   **Mode B — cover from scratch (text-to-image).** Use for free-form briefs with no usable product
+   photo. Build a YouTube-thumbnail-style cover with on-image Russian text. Wrap your concrete visual
+   brief in this exact template — keep the wording, replace only the inner `...`:
 
    ```
    создать обложку для - "<краткое описание сцены/темы + главный заголовок 2–4 слова>". стиль ютуб обложка. текста на обложке русские. надо учесть что обложка будет отображаться маленькой, поэтому сделай крупный читаемый текст, 2–4 слова максимум, без мелких деталей. Главный текст должен читаться даже при уменьшении до 160 px по ширине.
@@ -114,12 +128,14 @@ publication skill/stage.
    - Choose a punchy 2–4 word Russian headline that matches the post and name it inside the brief.
    - Keep the scene bold and simple: one clear subject, high contrast, no fine detail.
    - Aspect ratio: default `16:9` for the cover look; use `1:1` for a square feed post or `9:16` for stories/reels.
-   Completion: the prompt follows the cover template and names a clear 2–4 word Russian headline.
+   Completion: Mode A has 1–2 product photo URLs ready, or Mode B has a cover prompt with a clear headline.
 
-4. Generate the image through kie.ai.
-   - Run `generate-image` or `prepare --generate-image`.
-   - The helper calls `createTask`, polls `recordInfo`, and downloads the first result URL.
-   Completion: result JSON has `image_url` and preferably `image_path`.
+4. Generate the image(s) through kie.ai.
+   - Mode A: `generate-image --prompt "<background brief>" --input-url <photo1> [--input-url <photo2-for-one-combined>]`.
+     For two separate product shots, call `generate-image` once per photo. Aspect ratio `auto` or `1:1`.
+   - Mode B: `generate-image --prompt "<cover prompt>"` or `prepare --generate-image` (text-to-image).
+   - The helper calls `createTask`, polls `recordInfo`, downloads the first result URL, and reports the `model`.
+   Completion: result JSON has `image_url` and preferably `image_path` for each image.
 
 5. Preview in chat.
    - Show the 3 versions as numbered options.
@@ -140,16 +156,24 @@ publication skill/stage.
 
 ## Helper Commands
 
-URL extraction:
+URL extraction (returns text + `images` = product photos, og:image first):
 
 ```bash
-python scripts/content_studio.py extract-url "https://example.com/page"
+python scripts/content_studio.py extract-url "https://example.com/page" --max-images 4
 ```
 
-Image generation:
+Image generation — Mode B, text-to-image cover:
 
 ```bash
-python scripts/content_studio.py generate-image --prompt "..." --aspect-ratio 1:1
+python scripts/content_studio.py generate-image --prompt "..." --aspect-ratio 16:9
+```
+
+Image edit — Mode A, image-to-image (background fill/crop of a real product photo):
+
+```bash
+python scripts/content_studio.py generate-image \
+  --prompt "Расширь и дорисуй чистый фон вокруг товара, студийный свет, товар не менять" \
+  --input-url "https://static.tildacdn.com/stor.../photo.jpg" --aspect-ratio 1:1
 ```
 
 Save a prepared draft:
@@ -284,10 +308,16 @@ Use the exact `id`, `image_url`, and `image_path` returned by the helper.
 5. Publishing immediately.
    Fix: stage 4 only prepares and saves drafts. PostMyPost publication is stage 5.
 
+6. Inventing a picture for a product link.
+   Fix: when `extract-url` returned `images`, prefer Mode A (image-to-image on the real product photo)
+   over Mode B (cover from scratch). The client wants the actual product, background extended.
+
 ## Verification Checklist
 
 - [ ] Free-form brief produces 3 distinct Russian text versions.
 - [ ] URL/Tilda extraction returns page title/description/text and the final texts reflect the page.
-- [ ] kie.ai returns an image URL and the helper downloads a local image file.
+- [ ] URL/Tilda extraction returns `images` (product photos, no logos/favicons).
+- [ ] Mode A: image-to-image on a product photo (`--input-url`) extends/cleans the background, product intact.
+- [ ] Mode B: text-to-image cover returns an image URL and the helper downloads a local file.
 - [ ] `save-draft --require-postgres` returns `backend: "postgres"` and an integer draft id.
 - [ ] Telegram preview includes 3 texts and the generated image.

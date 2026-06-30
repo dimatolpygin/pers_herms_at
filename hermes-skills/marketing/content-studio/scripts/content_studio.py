@@ -35,7 +35,8 @@ SPACE_RE = re.compile(r"\s+")
 PLACEHOLDER_RE = re.compile(r"\b(lorem|todo|placeholder)\b|заглушк|рыба текста", re.IGNORECASE)
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
 
-KIE_MODEL = "gpt-image-2-text-to-image"
+KIE_TEXT_MODEL = "gpt-image-2-text-to-image"
+KIE_EDIT_MODEL = "gpt-image-2-image-to-image"
 KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask"
 KIE_RECORD_URL = "https://api.kie.ai/api/v1/jobs/recordInfo"
 
@@ -137,18 +138,28 @@ def kie_token() -> str:
     return token
 
 
-def kie_create_task(prompt: str, aspect_ratio: str, resolution: str | None, timeout: int) -> str:
+def kie_create_task(
+    prompt: str,
+    aspect_ratio: str,
+    resolution: str | None,
+    timeout: int,
+    *,
+    model: str = KIE_TEXT_MODEL,
+    input_urls: list[str] | None = None,
+) -> str:
     input_payload: dict[str, Any] = {
         "prompt": clean_text(prompt),
         "aspect_ratio": aspect_ratio,
     }
     if resolution:
         input_payload["resolution"] = resolution
+    if input_urls:
+        input_payload["input_urls"] = input_urls
     payload = http_json(
         "POST",
         KIE_CREATE_URL,
         token=kie_token(),
-        body={"model": KIE_MODEL, "input": input_payload},
+        body={"model": model, "input": input_payload},
         timeout=timeout,
     )
     data = payload.get("data") or {}
@@ -220,16 +231,26 @@ def generate_image(
     request_timeout: int,
     download: bool,
     mock_url: str | None,
+    input_urls: list[str] | None = None,
 ) -> dict[str, Any]:
     prompt = clean_text(prompt)
     if not prompt:
         raise ContentStudioError("Image prompt is required")
+    input_urls = [clean_text(u) for u in as_list(input_urls) if clean_text(u)]
+    model = KIE_EDIT_MODEL if input_urls else KIE_TEXT_MODEL
     task_id = None
     if mock_url:
         urls = [mock_url]
         state = "mock"
     else:
-        task_id = kie_create_task(prompt, aspect_ratio, resolution, request_timeout)
+        task_id = kie_create_task(
+            prompt,
+            aspect_ratio,
+            resolution,
+            request_timeout,
+            model=model,
+            input_urls=input_urls or None,
+        )
         deadline = time.monotonic() + timeout_seconds
         last_record: dict[str, Any] = {}
         while time.monotonic() < deadline:
@@ -254,6 +275,8 @@ def generate_image(
         "ok": True,
         "task_id": task_id,
         "state": state,
+        "model": model,
+        "input_urls": input_urls,
         "image_url": urls[0],
         "result_urls": urls,
         "image_path": image_path,
@@ -274,7 +297,42 @@ def meta_content(markup: str, name: str) -> str:
     return ""
 
 
-def extract_url(url: str, timeout: int, max_chars: int) -> dict[str, Any]:
+IMAGE_URL_RE = re.compile(r"https://[^\"'\s)<>]+\.(?:jpg|jpeg|png|webp)", re.IGNORECASE)
+NON_PRODUCT_IMAGE_RE = re.compile(r"favicon|logo|sprite|/icon|placeholder|avatar|emoji", re.IGNORECASE)
+
+
+def page_image_urls(markup: str, og_image: str, max_images: int) -> list[str]:
+    """Return likely product photos from a page, og:image first.
+
+    Tuned for Tilda: uploaded product photos live under ``/stor`` paths on
+    ``tildacdn``, while UI chrome (favicons, logos) lives under ``/tild``.
+    For non-Tilda pages we fall back to og:image plus filename heuristics.
+    """
+    candidates: list[str] = []
+    if og_image:
+        candidates.append(og_image)
+    candidates.extend(IMAGE_URL_RE.findall(markup))
+
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in candidates:
+        candidate = clean_text(html.unescape(raw))
+        if not candidate or candidate in seen:
+            continue
+        low = candidate.lower()
+        if "tildacdn" in low and "/stor" not in low:
+            # tildacdn asset that is not an uploaded product photo (UI chrome)
+            continue
+        if NON_PRODUCT_IMAGE_RE.search(low):
+            continue
+        seen.add(candidate)
+        out.append(candidate)
+        if len(out) >= max_images:
+            break
+    return out
+
+
+def extract_url(url: str, timeout: int, max_chars: int, max_images: int = 6) -> dict[str, Any]:
     request = Request(url, headers={"User-Agent": "Mozilla/5.0 HermesContentStudio/1.0"})
     try:
         with urlopen(request, timeout=timeout) as response:
@@ -291,6 +349,8 @@ def extract_url(url: str, timeout: int, max_chars: int) -> dict[str, Any]:
     title_match = re.search(r"<title[^>]*>(.*?)</title>", markup, re.IGNORECASE | re.DOTALL)
     title = clean_text(html.unescape(title_match.group(1))) if title_match else ""
     description = meta_content(markup, "description") or meta_content(markup, "og:description")
+    og_image = meta_content(markup, "og:image")
+    images = page_image_urls(markup, og_image, max_images)
     body = SCRIPT_STYLE_RE.sub(" ", markup)
     body = TAG_RE.sub(" ", body)
     text = clean_text(html.unescape(body))[:max_chars]
@@ -303,6 +363,7 @@ def extract_url(url: str, timeout: int, max_chars: int) -> dict[str, Any]:
         "description": description,
         "text": text,
         "chars": len(text),
+        "images": images,
     }
 
 
@@ -580,7 +641,7 @@ def default_image_prompt(spec: dict[str, Any]) -> str:
 
 
 def cmd_extract_url(args: argparse.Namespace) -> int:
-    print_json(extract_url(args.url, args.timeout, args.max_chars))
+    print_json(extract_url(args.url, args.timeout, args.max_chars, args.max_images))
     return 0
 
 
@@ -595,6 +656,7 @@ def cmd_generate_image(args: argparse.Namespace) -> int:
             request_timeout=args.request_timeout,
             download=not args.no_download,
             mock_url=args.mock_url,
+            input_urls=args.input_urls,
         )
     )
     return 0
@@ -615,7 +677,8 @@ def cmd_save_draft(args: argparse.Namespace) -> int:
 def cmd_prepare(args: argparse.Namespace) -> int:
     spec = load_json(args.spec)
     image_result = None
-    if args.generate_image or args.mock_url:
+    input_urls = args.input_urls or as_list(spec.get("input_urls"))
+    if args.generate_image or args.mock_url or input_urls:
         prompt = clean_text(spec.get("image_prompt")) or default_image_prompt(spec)
         image_result = generate_image(
             prompt,
@@ -626,6 +689,7 @@ def cmd_prepare(args: argparse.Namespace) -> int:
             request_timeout=args.request_timeout,
             download=not args.no_download,
             mock_url=args.mock_url,
+            input_urls=input_urls,
         )
         spec["image_prompt"] = prompt
         spec["image_url"] = image_result["image_url"]
@@ -646,13 +710,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Hermes content studio helper")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    extract = sub.add_parser("extract-url", help="Fetch an HTML/Tilda page and extract usable text")
+    extract = sub.add_parser("extract-url", help="Fetch an HTML/Tilda page and extract usable text + product images")
     extract.add_argument("url")
     extract.add_argument("--timeout", type=int, default=25)
     extract.add_argument("--max-chars", type=int, default=8000)
+    extract.add_argument("--max-images", type=int, default=6, help="Max product image URLs to return (og:image first)")
     extract.set_defaults(func=cmd_extract_url)
 
-    image = sub.add_parser("generate-image", help="Generate and optionally download an image through kie.ai")
+    image = sub.add_parser("generate-image", help="Generate (text-to-image) or edit (image-to-image) through kie.ai")
     image.add_argument("--prompt", required=True)
     image.add_argument("--aspect-ratio", default="1:1")
     image.add_argument("--resolution", choices=["1K", "2K", "4K"], default=None)
@@ -660,6 +725,13 @@ def build_parser() -> argparse.ArgumentParser:
     image.add_argument("--timeout-seconds", type=int, default=240)
     image.add_argument("--request-timeout", type=int, default=45)
     image.add_argument("--no-download", action="store_true")
+    image.add_argument(
+        "--input-url",
+        dest="input_urls",
+        action="append",
+        help="Source image URL for image-to-image (background fill/crop). Repeat for several. "
+        "When set, uses gpt-image-2-image-to-image.",
+    )
     image.add_argument("--mock-url", help="Testing only: skip kie.ai and use this URL")
     image.set_defaults(func=cmd_generate_image)
 
@@ -672,6 +744,12 @@ def build_parser() -> argparse.ArgumentParser:
     prepare = sub.add_parser("prepare", help="Optionally generate image and save the content draft")
     prepare.add_argument("--spec", required=True)
     prepare.add_argument("--generate-image", action="store_true")
+    prepare.add_argument(
+        "--input-url",
+        dest="input_urls",
+        action="append",
+        help="Source image URL(s) for image-to-image. May also be set as spec.input_urls.",
+    )
     prepare.add_argument("--mock-url", help="Testing only: skip kie.ai and use this URL")
     prepare.add_argument("--save", action="store_true")
     prepare.add_argument("--require-postgres", action="store_true")
