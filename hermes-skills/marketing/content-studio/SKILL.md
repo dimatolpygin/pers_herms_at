@@ -108,22 +108,29 @@ publication skill/stage.
 
 3. Choose the image strategy. Two modes:
 
-   **Mode A — social product card from the link's photos (image-to-image).** Preferred when the source
-   is a URL/Tilda product page and `extract-url` returned `images`. This is the client's "Вариант 3":
-   "генерация двух первых картинок из ссылки" means turning the first one or two product photos into
-   ready-to-post **product cards**, not just reusing the raw photos or only extending the background
-   (that adds almost nothing). Take each of the first 1–2 photos via `--input-url` (helper switches to
-   `gpt-image-2-image-to-image`) and compose a clean social card:
-   - Keep the real product unchanged — it is the actual item being sold.
-   - Place it on a clean, premium, minimalist background; soft studio light; square `1:1` for the feed.
-   - Add a large readable Russian headline = the product name (from the page title), plus an optional
-     short subtitle. image-to-image renders Cyrillic reliably here, unlike from-scratch covers.
-   - Generate two cards when the page has two photos (call `generate-image` once per photo).
+   **Mode A — marketplace product card from the link (image-to-image).** This is the client's "Вариант 3".
+   The post carries **two images, and only the first photo is sent to kie.ai**:
+   - **Photo 1 → a marketplace product card** (the single `--input-url` to `gpt-image-2-image-to-image`).
+   - **Photo 2 → used as-is**, the raw product photo, with no kie.ai call. Keep its URL/path for the post.
+   - The final post = generated card + untouched photo 2. If the page has only one photo, make the card
+     from it and skip the second image.
 
-   Prompt example (RU): «Сделай из этого фото карточку товара для Instagram. Сохрани реальный товар без
-   изменений, помести на чистый светлый минималистичный студийный фон. Сверху крупный читаемый русский
-   заголовок "<НАЗВАНИЕ ТОВАРА>". Снизу помельче "<короткая подпись>". Премиальная подача, мягкий свет,
-   квадратная композиция, без лишних деталей.»
+   Build the card from real page data. Read specs out of the `extract-url` text (brand, product type,
+   size, material, purpose, handmade, etc.) and compose an infographic listing like Wildberries/Ozon,
+   modeled on the client's reference:
+   - Keep the real product unchanged on a clean light-gray gradient background with rounded corners.
+   - Small brand name at top (e.g. «LOVA CERAMICS»).
+   - A very large bold Russian headline = product type (e.g. «ВАЗА») with a smaller subtitle (e.g. «керамическая»).
+   - A left column of 3–4 short spec bullets from the page (e.g. «Высота 23 см», «Материал керамика»,
+     «Для цветов и сухоцветов», «Ручная работа»).
+   - A framed feature badge at the bottom (e.g. «Подходит к любому интерьеру»).
+   - All text in Russian; vertical `3:4` or `4:5`. image-to-image renders Cyrillic reliably.
+
+   Prompt skeleton (RU): «Сделай из этого фото карточку товара для маркетплейса в вертикальном формате.
+   Сохрани реальный товар без изменений справа, чистый светло-серый градиентный фон со скруглёнными
+   углами. Сверху слева мелкий бренд "<БРЕНД>". Под ним очень крупный жирный заголовок "<ТИП ТОВАРА>" и
+   помельче "<подзаголовок>". Слева столбцом характеристики: "<п1>", "<п2>", "<п3>", "<п4>". Внизу слева
+   бейдж в рамке "<преимущество>". Все надписи на русском, чёткие, премиальный минимализм.»
 
    **Mode B — cover from scratch (text-to-image).** Use for free-form briefs with no usable product
    photo. Build a YouTube-thumbnail-style cover with on-image Russian text. Wrap your concrete visual
@@ -139,8 +146,8 @@ publication skill/stage.
    Completion: Mode A has 1–2 product photo URLs ready, or Mode B has a cover prompt with a clear headline.
 
 4. Generate the image(s) through kie.ai.
-   - Mode A: `generate-image --prompt "<card prompt with product name>" --input-url <photo1>`.
-     Call `generate-image` once per photo to get two separate cards. Aspect ratio `1:1` for the feed.
+   - Mode A: `generate-image --prompt "<card prompt with specs>" --input-url <photo1> --aspect-ratio 3:4`.
+     Only photo 1 goes to kie.ai (the card). Photo 2 stays raw — do NOT send it. The post uses both.
    - Mode B: `generate-image --prompt "<cover prompt>"` or `prepare --generate-image` (text-to-image).
    - The helper calls `createTask`, polls `recordInfo`, downloads the first result URL, and reports the `model`.
    Completion: result JSON has `image_url` and preferably `image_path` for each image.
@@ -176,12 +183,12 @@ Image generation — Mode B, text-to-image cover:
 python scripts/content_studio.py generate-image --prompt "..." --aspect-ratio 16:9
 ```
 
-Image edit — Mode A, image-to-image (social product card from a real product photo):
+Image edit — Mode A, image-to-image (marketplace product card from photo 1):
 
 ```bash
 python scripts/content_studio.py generate-image \
-  --prompt "Сделай карточку товара для Instagram: сохрани реальный товар, чистый светлый студийный фон, сверху крупный заголовок \"УТРЕННЯЯ ЗОЛА\", снизу \"Керамика ручной работы\"" \
-  --input-url "https://static.tildacdn.com/stor.../photo.jpg" --aspect-ratio 1:1
+  --prompt "Карточка товара для маркетплейса: сохрани реальный товар, светло-серый градиентный фон со скруглёнными углами, бренд \"LOVA CERAMICS\", крупный заголовок \"ВАЗА\" / \"керамическая\", характеристики слева \"Высота 23 см\", \"Материал керамика\", \"Для цветов и сухоцветов\", \"Ручная работа\", бейдж \"Подходит к любому интерьеру\"" \
+  --input-url "https://static.tildacdn.com/stor.../photo1.jpg" --aspect-ratio 3:4
 ```
 
 Save a prepared draft:
@@ -325,7 +332,7 @@ Use the exact `id`, `image_url`, and `image_path` returned by the helper.
 - [ ] Free-form brief produces 3 distinct Russian text versions.
 - [ ] URL/Tilda extraction returns page title/description/text and the final texts reflect the page.
 - [ ] URL/Tilda extraction returns `images` (product photos, no logos/favicons).
-- [ ] Mode A: image-to-image turns a product photo (`--input-url`) into a social card — real product, clean background, Russian headline.
+- [ ] Mode A: photo 1 → marketplace card (brand, big headline, 3–4 real spec bullets, feature badge), photo 2 kept raw; only photo 1 sent to kie.ai.
 - [ ] Mode B: text-to-image cover returns an image URL and the helper downloads a local file.
 - [ ] `save-draft --require-postgres` returns `backend: "postgres"` and an integer draft id.
 - [ ] Telegram preview includes 3 texts and the generated image.
