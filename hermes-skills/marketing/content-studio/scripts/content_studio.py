@@ -568,12 +568,14 @@ def save_draft(spec: dict[str, Any], *, require_postgres: bool, allow_missing_im
 
 def default_image_prompt(spec: dict[str, Any]) -> str:
     topic = clean_text(spec.get("topic") or spec.get("title") or spec.get("product_name"))
-    raw = clean_text(spec.get("raw_input") or spec.get("source_summary") or "")
     if not topic:
         raise ContentStudioError("image_prompt is missing and topic/title is empty")
+    # YouTube-thumbnail-style cover: large readable Russian headline, legible at 160px wide.
     return (
-        f"Create a clean social media visual for the topic: {topic}. "
-        f"Use a modern commercial style, clear composition, no text overlays. {raw}"
+        f'создать обложку для - "{topic}". стиль ютуб обложка. текста на обложке русские. '
+        f'надо учесть что обложка будет отображаться маленькой, поэтому сделай крупный читаемый '
+        f'текст, 2–4 слова максимум, без мелких деталей. Главный текст должен читаться даже при '
+        f'уменьшении до 160 px по ширине.'
     )[:20000]
 
 

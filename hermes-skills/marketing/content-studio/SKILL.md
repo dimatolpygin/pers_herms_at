@@ -104,10 +104,17 @@ publication skill/stage.
    - Keep platform constraints in mind if the user named a platform.
    Completion: 3 clearly different versions are ready.
 
-3. Build an image prompt.
-   - Use the business/topic, mood, visual scene, format, and "no text overlays" unless the user asked for text.
-   - Default aspect ratio: `1:1`. Use `9:16` for stories/reels, `16:9` for wide preview.
-   Completion: prompt is specific enough for a useful commercial visual.
+3. Build the image prompt as a YouTube-thumbnail-style cover (text ON the image, in Russian).
+   Wrap your concrete visual brief in this exact template — keep the wording, replace only the inner `...`:
+
+   ```
+   создать обложку для - "<краткое описание сцены/темы + главный заголовок 2–4 слова>". стиль ютуб обложка. текста на обложке русские. надо учесть что обложка будет отображаться маленькой, поэтому сделай крупный читаемый текст, 2–4 слова максимум, без мелких деталей. Главный текст должен читаться даже при уменьшении до 160 px по ширине.
+   ```
+
+   - Choose a punchy 2–4 word Russian headline that matches the post and name it inside the brief.
+   - Keep the scene bold and simple: one clear subject, high contrast, no fine detail.
+   - Aspect ratio: default `16:9` for the cover look; use `1:1` for a square feed post or `9:16` for stories/reels.
+   Completion: the prompt follows the cover template and names a clear 2–4 word Russian headline.
 
 4. Generate the image through kie.ai.
    - Run `generate-image` or `prepare --generate-image`.
@@ -183,7 +190,7 @@ draft = {
         {"angle": "sales", "text": "Третий готовый вариант текста..."}
     ],
     "selected_version": 1,
-    "image_prompt": "Modern clean social media visual for apartment renovation, bright room, no text overlays.",
+    "image_prompt": "создать обложку для - \"ремонт квартиры под ключ, светлая комната, главный заголовок 'РЕМОНТ ПОД КЛЮЧ'\". стиль ютуб обложка. текста на обложке русские. надо учесть что обложка будет отображаться маленькой, поэтому сделай крупный читаемый текст, 2–4 слова максимум, без мелких деталей. Главный текст должен читаться даже при уменьшении до 160 px по ширине.",
     "platforms": ["instagram"]
 }
 spec_path = artifacts / "draft_spec.json"
