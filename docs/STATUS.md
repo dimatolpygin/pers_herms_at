@@ -4,9 +4,9 @@
 > прочтения **обязательно** сверить с реальностью: `git tag -l "stage-*"`,
 > `git log --oneline -20` — таблица ниже может быть устаревшей.
 
-**Последнее обновление**: 2026-07-01 (этап 4 закрыт; этап 5 взят в работу)
+**Последнее обновление**: 2026-07-01 (этап 5: helper PostMyPost собран и провалидирован как черновик)
 **Текущий этап**: Этап 5 — Навык публикации через PostMyPost (куда/когда) (🚧 в работе)
-**Следующий шаг**: read-only проба PostMyPost API (`GET /accounts` с боевым токеном) — подтвердить базовый URL/авторизацию и получить id 7 подключённых соцсетей; затем helper: `/upload/init`(по URL)→`/upload/status`→`POST /publications`, навык спрашивает площадки + время (`scheduled_at`), «сейчас» из конца в конец. Доступы — в `postmypost.txt` (вне git). Живой пост в реальные соцсети — только с явного разрешения человека.
+**Следующий шаг**: (1) диалог навыка «куда/когда» в Telegram поверх черновика content-studio + запись статуса/ссылки/`scheduled_at` в `content_drafts`; (2) живой тест публикации (`--status 5 --confirm-publish`) — **только с явного разрешения человека** (пока держим статус 4 = черновик). Helper и API готовы.
 
 ---
 
@@ -29,7 +29,9 @@
 
 ## Активная работа
 
-Этап 4 закрыт (тег `stage-4-done`, 2026-07-01). **Этап 5 (PostMyPost) взят в работу.** Доступы получены (`postmypost.txt`, вне git), блокер снят. Изучена структура API (Bearer-авторизация; загрузка `/upload/init`→`/upload/complete`→`/upload/status`, есть режим загрузки по URL; список `GET /accounts`; создание `POST /publications`; rate-limit `X-Rate-Limit-*`). Точные поля `POST /publications` (массив id аккаунтов, медиа, дата/таймзона, публикация «сейчас» vs по расписанию) Swagger-доки текстом не отдали — подтверждаем живой read-only пробой и/или из OpenAPI. Базовый URL пока не подтверждён. Ничего в реальные соцсети ещё не публиковалось.
+Этап 4 закрыт (тег `stage-4-done`, 2026-07-01). **Этап 5 (PostMyPost) в работе — helper готов и провалидирован вживую как черновик.** Доступы в `postmypost.txt`/`.env` (вне git), блокер снят. Собран навык `hermes-skills/social-publishing/postmypost` + helper `postmypost.py` (dependency-light): команды `accounts`/`upload`(по URL→`file_id`)/`publish`/`delete`. База `https://api.postmypost.io/v4.1`, Bearer. Чистый API-референс — `docs/08_POSTMYPOST_API.md`. **Защита**: по умолчанию `publication_status=4` (черновик); живой пост (`5`) только с `--confirm-publish`. Проверено вживую в боевом проекте 349678 **только черновиками** (ничего не опубликовано): 7 аккаунтов, upload→`file_id 50782229`, publish→черновик `id 30808023` (status 4), delete→убрано; полный круг create+delete через helper → 0 публикаций. Осталось: диалог «куда/когда» в Telegram + запись статуса/ссылки в `content_drafts`, и живой тест публикации с разрешения человека.
+
+Установлен навык (копия в `%LOCALAPPDATA%\hermes\skills\social-publishing\postmypost`). Env passthrough: `POSTMYPOST_TOKEN`/`POSTMYPOST_PROJECT_ID` объявлены во фронтматтере навыка (как у content-studio).
 
 **На будущее для этапа 5+ (важные факты из этапа 4)**:
 - Пост может нести **несколько картинок** — они лежат в `hermes_agent.content_drafts.images` (JSONB-массив `{role,url,path}`), плюс основная в `image_url`/`image_path`. Для Tilda: `role=card` (сгенерированная карточка) + `role=raw` (живое фото). Постинг должен брать всю галерею.
