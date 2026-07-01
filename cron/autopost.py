@@ -42,6 +42,16 @@ from types import ModuleType
 from typing import Any
 
 
+# When stdout is redirected to a file on Russian Windows, Python encodes it as
+# cp1251, which has no "→"/emoji — a log line with those characters would crash
+# the whole run (mid-publish, leaving a draft stuck in 'publishing'). Force UTF-8.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+    except Exception:
+        pass
+
+
 def log(msg: str) -> None:
     ts = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
     print(f"[{ts}] {msg}", flush=True)
