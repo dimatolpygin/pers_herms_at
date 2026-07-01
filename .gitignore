@@ -4,6 +4,10 @@ env_пример.txt
 .env
 .env.*
 *.key
+# PostMyPost боевой токен/доступы (project_id + token + аккаунты)
+postmypost.txt
+запуск.txt
+правки.txt
 
 # Переписка/материалы заказчика
 переписка.txt
