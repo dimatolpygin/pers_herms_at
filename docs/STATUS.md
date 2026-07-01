@@ -4,9 +4,9 @@
 > прочтения **обязательно** сверить с реальностью: `git tag -l "stage-*"`,
 > `git log --oneline -20` — таблица ниже может быть устаревшей.
 
-**Последнее обновление**: 2026-07-01 (этап 4: починен баг с секретами в песочнице)
-**Текущий этап**: Этап 4 — Навык «контент»: текст + картинка (гибко) (🚧 в работе)
-**Следующий шаг**: провести живую Telegram-проверку `content-studio` человеком: свободное описание → 3 текста + kie.ai-картинка в превью + сохранение draft id; после подтверждения отметить ROADMAP и закрыть stage 4. **Перед проверкой перезапустить gateway**, чтобы навык перечитал обновлённый фронтматтер (env passthrough).
+**Последнее обновление**: 2026-07-01 (этап 4 закрыт вживую, тег `stage-4-done`)
+**Текущий этап**: Этап 5 — Навык публикации через PostMyPost (куда/когда) (☐ не начат)
+**Следующий шаг**: взять этап 5 в работу — интеграция PostMyPost API (загрузка фото → проверка → публикация), навык спрашивает площадки и время (`scheduled_at`), немедленная публикация «сейчас» из конца в конец. Блокер: нужен активный аккаунт клиента (тариф «Продвинутый 5»).
 
 ---
 
@@ -20,7 +20,7 @@
 | 1 | Живой мозг: текст + голос + стиль | ✅ | `stage-1-done` | `fb08808` | 2026-06-28 |
 | 2 | Долгосрочная память | ✅ | `stage-2-done` | `fa0fde4` | 2026-06-28 |
 | 3 | Навык «код и тексты» (docx/csv) | ✅ | `stage-3-done` | `85a78e4` | 2026-06-29 |
-| 4 | Навык «контент»: текст + картинка (гибко) | 🚧 | `stage-4-done` | — | — |
+| 4 | Навык «контент»: текст + картинка (гибко) | ✅ | `stage-4-done` | `0c8cb46` | 2026-07-01 |
 | 5 | Навык публикации PostMyPost (куда/когда) | ☐ | `stage-5-done` | — | — |
 | 6 | Автопостинг по расписанию (cron-обвязка) | ☐ | `stage-6-done` | — | — |
 | 7 | Деплой на VPS | ☐ | `stage-7-done` | — | — |
@@ -29,9 +29,12 @@
 
 ## Активная работа
 
-Этап 4 в работе. Добавлен локальный Hermes skill `content-studio`: исходник `hermes-skills/marketing/content-studio`, установленная копия `%LOCALAPPDATA%\hermes\skills\marketing\content-studio`. Добавлена миграция `migrations/0001_content_drafts.sql`; она применена в локальный Docker Postgres `postgres16` / БД `mydb`, схема `hermes_agent`, таблица `content_drafts`. Helper `content_studio.py` поддерживает URL/Tilda extraction, kie.ai (`createTask` → `recordInfo` → download), сохранение draft в Postgres через Python-драйвер или `CONTENT_PSQL_COMMAND`, и JSONL fallback для dev. Проверено: mock image path contract работает; запись через `CONTENT_PSQL_COMMAND='docker exec -i postgres16 psql -U postgres -d mydb -At -v ON_ERROR_STOP=1'` вернула Postgres draft `id=2`; реальный helper `prepare --generate-image --save --require-postgres` вернул task `d2471fea927171559ff5b621c732dca5`, скачал картинку в `%LOCALAPPDATA%\hermes\artifacts\content-studio\images\file_00000000b768722f9785e46634905438_20260629_233050.png` и сохранил draft `id=3`; агентный CLI UAT через `hermes chat --skills content-studio` сделал 3 текста, сгенерировал kie.ai картинку `%LOCALAPPDATA%\hermes\artifacts\content-studio\images\file_000000009e7471fd8b551bba92eff922_20260629_234019.png` и сохранил draft `id=4` (session `20260629_233600_4dd743`). ROADMAP stage 4 пока без `[x]`, потому что нужна живая Telegram-проверка человеком.
+Этап 4 закрыт (тег `stage-4-done`, 2026-07-01). Этап 5 (PostMyPost) ещё не начат — ждёт активного аккаунта клиента (см. блокеры).
 
-**2026-07-01 — найден и починен баг живого Telegram-прогона.** В логе Kira (29.06 23:58) агент в Telegram не смог сгенерировать картинку: «в sandbox нет переменной KIE». Корень: `execute_code` (рекомендованный путь самого навыка) использует скрабер `_scrub_child_env`, который режет любое имя с `KEY/DSN/TOKEN`, если навык не объявил его в `required_environment_variables` (защита GHSA-rhgp-j443-p4rf). В CLI-тестах не воспроизводилось, т.к. переменные экспортировались вручную. Фикс (commit `4174cc3`): в фронтматтер `content-studio/SKILL.md` добавлены `required_environment_variables` (KIE_AI_API_KEY + CONTENT_PSQL_COMMAND/CONTENT_DATABASE_URL/CONTENT_DB_SCHEMA/CONTENT_DB_TABLE, все `optional`). Проверено прогоном реальной логики Hermes: ключи теперь доходят до песочницы `execute_code`, а `OPENROUTER/GROQ` по-прежнему режутся. Текущий gateway (PID старт 01.07 00:23) уже держит KIE в `os.environ`; для подхвата нового фронтматтера достаточно перезапустить gateway. Постинга (этапы 5–6) в проекте нет — Codex их не делал.
+**На будущее для этапа 5+ (важные факты из этапа 4)**:
+- Пост может нести **несколько картинок** — они лежат в `hermes_agent.content_drafts.images` (JSONB-массив `{role,url,path}`), плюс основная в `image_url`/`image_path`. Для Tilda: `role=card` (сгенерированная карточка) + `role=raw` (живое фото). Постинг должен брать всю галерею.
+- Поле `scheduled_at` (timestamptz) в таблице уже есть — этап 5 его заполняет, этап 6 (cron) по нему постит. Статусы: `draft/previewed/approved/scheduled/published/failed/cancelled`.
+- **SOUL.md** (вне git, `%LOCALAPPDATA%\hermes\SOUL.md`) содержит правило маршрутизации на навык `content-studio` и запрет встроенного `image_generate`/FAL. При деплое (этап 7) SOUL.md надо перенести на сервер.
 
 **Запущенные локальные процессы** (dev-окружение):
 - `hermes gateway` — Telegram-бот `@NEIRO_BRAIN01_BOT` (polling). Лог: `%LOCALAPPDATA%\hermes\logs\gateway.log`.
@@ -47,6 +50,11 @@
 _Архитектурное правило (актуально для всех этапов): сервер 1 ядро/1 ГБ → никакого локального инференса. STT=Groq API, vision=OpenRouter API (решено и внедрено на этапе 1)._
 
 ## История закрытий
+
+2026-07-01 — Этап 4: Навык «контент» (текст + картинка, гибко) — tag `stage-4-done`.
+Локальный Hermes skill `content-studio` (исходник `hermes-skills/marketing/content-studio`, установл. копия в `%LOCALAPPDATA%\hermes\skills`). Миграции `0001` (таблица `hermes_agent.content_drafts`) и `0002` (поле `images`), применены в Docker Postgres `postgres16`/`mydb`. Helper без сторонних зависимостей: extract-url (текст + фото товара, `/stor` vs `/tild` фильтр), kie.ai text-to-image (обложка) и **image-to-image** (`gpt-image-2-image-to-image`, карточка товара из фото), сохранение в Postgres через `CONTENT_PSQL_COMMAND`.
+**Ключевые находки/фиксы по ходу**: (1) секреты не доходили до песочницы `execute_code` — добавлены `required_environment_variables` во фронтматтер (`4174cc3`); (2) агент врал «база недоступна» при живом сохранении в Postgres — уточнён backend + `--require-postgres` (`ebe2eee`); (3) стратегия картинки уточнена с клиентом: свободный бриф → обложка YouTube с текстом (`b358372`), ссылка Tilda → маркетплейс-**карточка** из 1-го фото + 2-е фото как есть (`0ee5609`, `d88ad93`); (4) навык не триггерился на «создай пост … фото» без ссылки и уходил во встроенный FAL `image_generate` — расширено описание + правило в SOUL.md (`0c8cb46`).
+**Верификация**: Kira подтвердила вживую в Telegram (2026-07-01): свободный бриф, ссылка Tilda (карточка «ВАЗА/LOVA CERAMICS» с реальными характеристиками + живое фото), 3 текста, сохранение черновика. Машинно: image-to-image на реальном фото lovaceramics вернул карточку (task `503c720c`); 2-картиночный черновик сохранён в Postgres (`images` длиной 2). ROADMAP stage 4 — все `[x]`.
 
 2026-06-29 — Этап 3: Навык «код и тексты» (docx/csv) — tag `stage-3-done`.
 Реализован локальный Hermes skill `business-documents`: исходник `hermes-skills/productivity/business-documents`, установленная копия `%LOCALAPPDATA%\hermes\skills\productivity\business-documents`. Helper без сторонних зависимостей: `.docx` собирается как Office Open XML, `.csv` пишется UTF-8 BOM; для отчётов поддержан section-based layout с заголовком, секциями, буллетами и таблицами внутри CSV.
