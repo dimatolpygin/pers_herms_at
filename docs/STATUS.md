@@ -4,9 +4,9 @@
 > прочтения **обязательно** сверить с реальностью: `git tag -l "stage-*"`,
 > `git log --oneline -20` — таблица ниже может быть устаревшей.
 
-**Последнее обновление**: 2026-07-01 (этап 5 закрыт: живая публикация + write-back в БД проверены)
-**Текущий этап**: Этап 6 — Автопостинг по расписанию (cron-обвязка) (☐ не начат)
-**Следующий шаг**: cron-скрипт, который берёт из `content_drafts` записи со `status=scheduled` и наступившим `scheduled_at` → публикует через PostMyPost helper (`--status 5 --confirm-publish`) по `platforms[].account_id` → обновляет строку (`update-draft --status published --append-links`). Без LLM, идемпотентно. Всё готово в БД: `platforms[].account_id`, `scheduled_at` (МСК), `images`.
+**Последнее обновление**: 2026-07-01 (этап 6 взят в работу: автопостинг по крону)
+**Текущий этап**: Этап 6 — Автопостинг по расписанию (cron-обвязка) (🚧 в работе)
+**Следующий шаг**: написать cron-скрипт `autopost.py` (stdlib, без LLM): атомарно клеймит из `content_drafts` записи `status=scheduled` с наступившим `scheduled_at` (`UPDATE … status='publishing' … RETURNING` — идемпотентность), публикует через `postmypost.py --status 5 --confirm-publish` по каждому `platforms[].account_id` (картинки из `images`, карточка первой; Pinterest — title/link), затем `update-draft --status published --append-links` (или `failed`). Локальный тест: поставить черновик с due `scheduled_at` → прогнать скрипт → пост + запись в БД.
 
 ---
 
@@ -22,7 +22,7 @@
 | 3 | Навык «код и тексты» (docx/csv) | ✅ | `stage-3-done` | `85a78e4` | 2026-06-29 |
 | 4 | Навык «контент»: текст + картинка (гибко) | ✅ | `stage-4-done` | `dda0bf2` | 2026-07-01 |
 | 5 | Навык публикации PostMyPost (куда/когда) | ✅ | `stage-5-done` | `a392e78` | 2026-07-01 |
-| 6 | Автопостинг по расписанию (cron-обвязка) | ☐ | `stage-6-done` | — | — |
+| 6 | Автопостинг по расписанию (cron-обвязка) | 🚧 | `stage-6-done` | — | — |
 | 7 | Деплой на VPS | ☐ | `stage-7-done` | — | — |
 
 Детальные критерии приёмки каждого этапа — в [`07_ROADMAP.md`](07_ROADMAP.md).
