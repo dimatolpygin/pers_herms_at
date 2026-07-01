@@ -6,6 +6,8 @@ env_пример.txt
 *.key
 # PostMyPost боевой токен/доступы (project_id + token + аккаунты)
 postmypost.txt
+# S3-доступы (Beget: endpoint + access/secret key + bucket)
+s3.txt
 запуск.txt
 правки.txt
 
