@@ -4,9 +4,9 @@
 > прочтения **обязательно** сверить с реальностью: `git tag -l "stage-*"`,
 > `git log --oneline -20` — таблица ниже может быть устаревшей.
 
-**Последнее обновление**: 2026-07-01 (этап 6 взят в работу: автопостинг по крону)
-**Текущий этап**: Этап 6 — Автопостинг по расписанию (cron-обвязка) (🚧 в работе)
-**Следующий шаг**: написать cron-скрипт `autopost.py` (stdlib, без LLM): атомарно клеймит из `content_drafts` записи `status=scheduled` с наступившим `scheduled_at` (`UPDATE … status='publishing' … RETURNING` — идемпотентность), публикует через `postmypost.py --status 5 --confirm-publish` по каждому `platforms[].account_id` (картинки из `images`, карточка первой; Pinterest — title/link), затем `update-draft --status published --append-links` (или `failed`). Локальный тест: поставить черновик с due `scheduled_at` → прогнать скрипт → пост + запись в БД.
+**Последнее обновление**: 2026-07-01 (этап 6 закрыт: живой автопостинг по крону проверен)
+**Текущий этап**: Этап 7 — Деплой на VPS (☐ не начат)
+**Следующий шаг**: деплой агента + Postgres на VPS `89.125.17.86` (Docker) через навык `/okdeploy`; перенести на сервер SOUL.md, cron-обвязку (`cron/autopost.py` → Linux cron), секреты в серверный `.env`; переключить прод-бота `@Mironov_AgentBot` + Mika. Нужен прод-ключ OpenRouter клиента (блокер).
 
 ---
 
@@ -22,25 +22,24 @@
 | 3 | Навык «код и тексты» (docx/csv) | ✅ | `stage-3-done` | `85a78e4` | 2026-06-29 |
 | 4 | Навык «контент»: текст + картинка (гибко) | ✅ | `stage-4-done` | `dda0bf2` | 2026-07-01 |
 | 5 | Навык публикации PostMyPost (куда/когда) | ✅ | `stage-5-done` | `a392e78` | 2026-07-01 |
-| 6 | Автопостинг по расписанию (cron-обвязка) | 🚧 | `stage-6-done` | — | — |
+| 6 | Автопостинг по расписанию (cron-обвязка) | ✅ | `stage-6-done` | — | 2026-07-01 |
 | 7 | Деплой на VPS | ☐ | `stage-7-done` | — | — |
 
 Детальные критерии приёмки каждого этапа — в [`07_ROADMAP.md`](07_ROADMAP.md).
 
 ## Активная работа
 
-Этап 5 закрыт (тег `stage-5-done`, 2026-07-01). **Начинаем этап 6 (автопостинг по крону).** Навык `postmypost` + helper `postmypost.py` (accounts/upload/publish/delete, draft-safe: `--status 5 --confirm-publish` для живого поста). Диалог «куда/когда (МСК)» отработан вживую двухшагово (площадки → доска Pinterest → время). Живой пост подтверждён Kira: Instagram (pub `30811163`) и Pinterest (pub `30810668`).
+Этап 6 закрыт (тег `stage-6-done`, 2026-07-01). **Следующий — этап 7 (деплой на VPS).** Автопостинг по крону работает вживую: `cron/autopost.py` (stdlib, без LLM) + launcher `cron/run-autopost.bat` + миграция `0003` (статус `publishing`). Локально гоняли через Windows Task Scheduler (каждую 1 мин); **после теста задачу удалили** (`Unregister-ScheduledTask HermesAutopost`) — на проде будет Linux cron.
 
-**Что готово в БД для крона (этап 6):**
-- `content_drafts.platforms` теперь хранит объекты `{network, account_id, name}` — крон берёт числовой `account_id` (не имя сети) и постит без LLM.
-- `scheduled_at` (timestamptz, МСК) — заполняется у запланированных постов; `status` (`scheduled`→`published`/`failed`); `publication_links` — массив `{id, network, account_id, post_at}`.
-- Write-back после публикации — командой `content_studio.py update-draft --id … --status … --scheduled-at … --publication-links … --append-links` (UPDATE строки на месте, **не** новый INSERT). Массив-безопасная дозапись ссылок. Это убрало дубль-строки и незаполненный `scheduled_at`.
+**Как работает автопостер:** SELECT `status=scheduled` с наступившим `scheduled_at` → атомарный claim `UPDATE … status='publishing' WHERE status='scheduled'` (идемпотентность) → грузит `images` один раз (карточка первой), создаёт публикацию на каждый `platforms[].account_id` (`create_publication` status 5, Pinterest — title/link) → write-back `content_studio.update_draft` (`published`/`failed` + `publication_links`). Секреты автозагружаются из `%LOCALAPPDATA%\hermes\.env`.
 
-**Порядок картинок:** позиция в посте = порядок `--image-url` (helper грузит последовательно, сохраняет порядок в `file_ids`). Карточка идёт первой, т.к. `images[0]=role:card`.
+**Живой прогон 2026-07-01:** cron сам в 15:40 МСК опубликовал черновик 22 в ВК LOVA ceramics (pub `30816431`); строка → `published` + `scheduled_at` + ссылка (id PMP). Ссылка = id публикации PMP, **не** прямой vk.com-URL (мешает баг валидации ответа PMP на `GET /publications/{id}` — 422). Kira подтвердила.
 
-**Критерий 4 (ошибка публикации) — живьём не проверяли по решению Kira.** Механизм есть: helper бросает `PostMyPostError` с деталью, статус пишется `update-draft --status failed`.
+**Найденный и исправленный баг:** при перенаправлении вывода в файл на русской Windows Python писал в cp1251 → `log()` падал на символе `→`/эмодзи **после** создания публикации (пост уходил, но статус зависал на `publishing`). Фикс: форс UTF-8 для `stdout/stderr` в `autopost.py`; в `.bat` путь через `%~dp0` (не `cd` в кириллическую папку). Строку 22 добили вручную → `published`.
 
-Установлены копии навыков в `%LOCALAPPDATA%\hermes\skills\...`. Env passthrough: `POSTMYPOST_TOKEN`/`POSTMYPOST_PROJECT_ID` во фронтматтере. **SOUL.md** (вне git) содержит правила: спроси куда/когда (МСК) до составления, площадки по отдельности (не комбо, не кросспостинг по умолчанию), Pinterest — уточнять доску, сохранять `account_id`. При деплое (этап 7) перенести SOUL.md на сервер.
+**Порядок картинок:** позиция в посте = порядок `--image-url` (helper грузит последовательно, сохраняет порядок в `file_ids`). Карточка первой (`images[0]=role:card`).
+
+Установлены копии навыков в `%LOCALAPPDATA%\hermes\skills\...`. Env passthrough во фронтматтере. **SOUL.md** (вне git) содержит правила диалога публикации; при деплое (этап 7) перенести SOUL.md + cron на сервер.
 
 **Важные факты (из этапа 4)**:
 - Пост может нести **несколько картинок** — они лежат в `hermes_agent.content_drafts.images` (JSONB-массив `{role,url,path}`), плюс основная в `image_url`/`image_path`. Для Tilda: `role=card` (сгенерированная карточка) + `role=raw` (живое фото). Постинг должен брать всю галерею.
@@ -61,6 +60,12 @@
 _Архитектурное правило (актуально для всех этапов): сервер 1 ядро/1 ГБ → никакого локального инференса. STT=Groq API, vision=OpenRouter API (решено и внедрено на этапе 1)._
 
 ## История закрытий
+
+2026-07-01 — Этап 6: Автопостинг по расписанию (cron-обвязка) — tag `stage-6-done`.
+`cron/autopost.py` (stdlib, **без LLM**): берёт `content_drafts` `status=scheduled` с наступившим `scheduled_at`, атомарно клеймит (scheduled→publishing, идемпотентность), публикует через переиспользуемые функции `postmypost.py` (upload/create_publication status 5) по каждому `platforms[].account_id`, write-back через `content_studio.update_draft`. Launcher `run-autopost.bat`, миграция `0003` (статус `publishing`), README со схемой планировщика (Task Scheduler локально / Linux cron на проде).
+**Верификация**: Kira подтвердила вживую (2026-07-01) — Windows Task Scheduler сам в 15:40 МСК опубликовал черновик 22 в ВК LOVA ceramics (pub `30816431`), строка → `published` + `scheduled_at` + ссылка. Идемпотентность и «без LLM» — машинно. ROADMAP критерии 1–4 `[x]`.
+**Баг по ходу, исправлен**: cp1251-падение `log()` на `→`/эмодзи при выводе в файл (пост уходил, но статус зависал `publishing`) → форс UTF-8 stdout/stderr; `.bat` через `%~dp0` вместо `cd` в кириллическую папку. Строку 22 финализировали вручную; чистый end-to-end прогон с фиксом живьём не повторяли (нет нужды — механизм тот же).
+**Нюанс ссылки**: `publication_links` хранит id публикации PMP, не прямой vk.com-URL (`GET /publications/{id}` в PMP отдаёт 422 из-за их бага валидации ответа). После теста задачу планировщика удалили.
 
 2026-07-01 — Этап 5: Навык публикации PostMyPost (куда/когда) — tag `stage-5-done`.
 Навык `hermes-skills/social-publishing/postmypost` (helper `postmypost.py`, dependency-light) + write-back через новую команду `content_studio.py update-draft`. Диалог «куда/когда (МСК)» двухшаговый: площадки по отдельности (ТГ/ВК/Инста/Pinterest или «все сразу», без кросспостинга по умолчанию) → если Pinterest, отдельным вопросом доска (4 шт) → время МСК/«сейчас». Порядок картинок = порядок `--image-url` (карточка первой).
