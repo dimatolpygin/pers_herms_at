@@ -20,3 +20,6 @@ build/
 # Логи и временное
 *.log
 tmp/
+доки_postmypost.txt
+__pycache__/
+*.pyc
