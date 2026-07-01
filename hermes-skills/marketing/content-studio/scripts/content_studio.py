@@ -656,6 +656,113 @@ def save_draft(spec: dict[str, Any], *, require_postgres: bool, allow_missing_im
     return save_jsonl(record)
 
 
+# --- Update an existing draft in place (publish write-back) ----------------
+#
+# The publish step (postmypost skill) records its outcome by UPDATEing the same
+# content_drafts row — status, scheduled_at, platforms, publication_links — instead
+# of inserting a new row. This keeps one row per post and fills scheduled_at, which
+# stage 6 (cron) relies on. When appending publication links, the merge is array-safe
+# even if the column still holds the default empty object.
+
+APPEND_LINKS_SQL = (
+    "(CASE WHEN jsonb_typeof(publication_links) = 'array' "
+    "THEN publication_links ELSE '[]'::jsonb END)"
+)
+
+
+def update_psql(draft_id: int, fields: dict[str, Any], command: str, *, append_links: bool) -> dict[str, Any]:
+    parts: list[str] = []
+    if "status" in fields:
+        parts.append(f"status = {sql_literal(fields['status'])}")
+    if "scheduled_at" in fields:
+        sched = fields["scheduled_at"]
+        parts.append(f"scheduled_at = {sql_literal(sched, cast='timestamptz') if sched else 'NULL'}")
+    if "platforms" in fields:
+        parts.append(f"platforms = {json_literal(fields['platforms'])}")
+    if "publication_links" in fields:
+        links = json_literal(fields["publication_links"])
+        parts.append(f"publication_links = {APPEND_LINKS_SQL} || {links}" if append_links
+                     else f"publication_links = {links}")
+    if "notes" in fields:
+        parts.append(f"notes = {sql_literal(fields['notes'])}")
+    if not parts:
+        raise ContentStudioError("update-draft: nothing to update (pass at least one field)")
+    table = qualified_content_table()
+    sql = (
+        f"UPDATE {table} SET {', '.join(parts)} WHERE id = {int(draft_id)} "
+        "RETURNING id, status, scheduled_at, publication_links;"
+    )
+    args = shlex.split(command)
+    if not args:
+        raise ContentStudioError("CONTENT_PSQL_COMMAND is empty")
+    proc = subprocess.run(args, input=sql, text=True, encoding="utf-8", capture_output=True, timeout=30)
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout).strip()
+        raise ContentStudioError(f"psql update failed: {detail[:800]}")
+    row_lines = [line.strip() for line in proc.stdout.splitlines() if line.strip() and "|" in line]
+    if not row_lines:
+        raise ContentStudioError(f"update-draft: no draft with id {draft_id}")
+    row = row_lines[-1].split("|")
+    return {
+        "ok": True, "backend": "postgres", "driver": "psql",
+        "schema": db_schema(), "table": db_table(),
+        "id": int(row[0]), "status": row[1], "scheduled_at": row[2] or None,
+        "updated_fields": sorted(fields.keys()),
+    }
+
+
+def update_postgres(draft_id: int, fields: dict[str, Any], dsn: str, *, append_links: bool) -> dict[str, Any]:
+    driver = postgres_driver()
+    if not driver:
+        raise ContentStudioError("Postgres DSN is set, but neither psycopg nor psycopg2 is installed")
+    driver_name, module = driver
+    parts: list[str] = []
+    params: list[Any] = []
+    if "status" in fields:
+        parts.append("status = %s"); params.append(fields["status"])
+    if "scheduled_at" in fields:
+        parts.append("scheduled_at = %s"); params.append(fields["scheduled_at"] or None)
+    if "platforms" in fields:
+        parts.append("platforms = %s::jsonb"); params.append(json.dumps(fields["platforms"], ensure_ascii=False))
+    if "publication_links" in fields:
+        parts.append(f"publication_links = {APPEND_LINKS_SQL} || %s::jsonb" if append_links
+                     else "publication_links = %s::jsonb")
+        params.append(json.dumps(fields["publication_links"], ensure_ascii=False))
+    if "notes" in fields:
+        parts.append("notes = %s"); params.append(fields["notes"])
+    if not parts:
+        raise ContentStudioError("update-draft: nothing to update (pass at least one field)")
+    table = qualified_content_table()
+    sql = f"UPDATE {table} SET {', '.join(parts)} WHERE id = %s RETURNING id, status, scheduled_at"
+    params.append(int(draft_id))
+    conn = module.connect(dsn)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            row = cur.fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+    if not row:
+        raise ContentStudioError(f"update-draft: no draft with id {draft_id}")
+    return {
+        "ok": True, "backend": "postgres", "driver": driver_name,
+        "schema": db_schema(), "table": db_table(),
+        "id": row[0], "status": row[1], "scheduled_at": str(row[2]) if row[2] else None,
+        "updated_fields": sorted(fields.keys()),
+    }
+
+
+def update_draft(draft_id: int, fields: dict[str, Any], *, append_links: bool) -> dict[str, Any]:
+    dsn = db_dsn()
+    if dsn:
+        return update_postgres(draft_id, fields, dsn, append_links=append_links)
+    command = psql_command()
+    if command:
+        return update_psql(draft_id, fields, command, append_links=append_links)
+    raise ContentStudioError("update-draft needs Postgres (set CONTENT_DATABASE_URL or CONTENT_PSQL_COMMAND)")
+
+
 def default_image_prompt(spec: dict[str, Any]) -> str:
     topic = clean_text(spec.get("topic") or spec.get("title") or spec.get("product_name"))
     if not topic:
@@ -700,6 +807,25 @@ def cmd_save_draft(args: argparse.Namespace) -> int:
             allow_missing_image=args.allow_missing_image,
         )
     )
+    return 0
+
+
+def cmd_update_draft(args: argparse.Namespace) -> int:
+    fields: dict[str, Any] = {}
+    if args.status is not None:
+        fields["status"] = args.status
+    if args.scheduled_at is not None:
+        fields["scheduled_at"] = args.scheduled_at or None
+    if args.platforms is not None:
+        fields["platforms"] = json.loads(args.platforms)
+    if args.publication_links is not None:
+        links = json.loads(args.publication_links)
+        if args.append_links and isinstance(links, dict):
+            links = [links]
+        fields["publication_links"] = links
+    if args.notes is not None:
+        fields["notes"] = args.notes
+    print_json(update_draft(args.id, fields, append_links=args.append_links))
     return 0
 
 
@@ -769,6 +895,19 @@ def build_parser() -> argparse.ArgumentParser:
     save.add_argument("--require-postgres", action="store_true")
     save.add_argument("--allow-missing-image", action="store_true")
     save.set_defaults(func=cmd_save_draft)
+
+    upd = sub.add_parser("update-draft", help="Update an existing draft in place (publish write-back)")
+    upd.add_argument("--id", type=int, required=True)
+    upd.add_argument("--status", help="draft/previewed/approved/scheduled/published/failed/cancelled")
+    upd.add_argument("--scheduled-at", dest="scheduled_at",
+                     help="ISO timestamptz in МСК (+03:00); pass empty string to clear")
+    upd.add_argument("--platforms", help="JSON array of platform objects to set (with account_id)")
+    upd.add_argument("--publication-links", dest="publication_links",
+                     help="JSON (array or object) of publication results to record")
+    upd.add_argument("--append-links", action="store_true",
+                     help="append to the existing publication_links array instead of replacing")
+    upd.add_argument("--notes")
+    upd.set_defaults(func=cmd_update_draft)
 
     prepare = sub.add_parser("prepare", help="Optionally generate image and save the content draft")
     prepare.add_argument("--spec", required=True)

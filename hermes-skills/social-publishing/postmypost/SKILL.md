@@ -1,7 +1,7 @@
 ---
 name: postmypost-publish
 description: Use when the user wants to publish or schedule a prepared post to social networks — Russian triggers like «запости», «опубликуй», «выложи в соцсети», «постни», «запланируй пост», «отправь в инсту/телеграм/вк/пинтерест». Takes a content draft (text + image/card from content-studio), asks WHERE (which of the connected accounts) and WHEN (now or a scheduled time), then publishes through PostMyPost. Creates a DRAFT by default; a live post requires explicit user confirmation.
-version: 1.0.0
+version: 1.1.0
 author: Hermes Agent Project
 license: MIT
 required_environment_variables:
@@ -56,21 +56,47 @@ Pinterest posts usually need a `--title` (and often a `--link`).
 1. Confirm the content. There must be post text and image(s) (usually a saved `content_drafts` row).
    Completion: text + image URLs/paths are known.
 
-2. Ask WHERE and WHEN.
+2. Confirm WHERE and WHEN (usually already chosen in content-studio).
+   - The draft normally carries `platforms` and `scheduled_at` because content-studio asks «куда/когда»
+     up front. Reuse them; only ask if they are missing or the user changes their mind.
+   - `platforms` should hold concrete PostMyPost **account ids** as objects
+     (`{"network":"pinterest","account_id":2180768,"name":"Вазы и кашпо напольные"}`), not bare names.
+     If a draft still has plain names, resolve them via `accounts` and update the draft's `platforms`
+     with the ids — stage 6 cron posts with NO LLM and reads `account_id` straight from the row.
    - WHERE: which accounts (show the list; accept names or networks, map to ids via `accounts`).
-   - WHEN: «сейчас» → publish now; a time → schedule (`--post-at` ISO, e.g. `2026-07-02T10:00:00+03:00`).
+     If a network has several connected accounts, resolve to the specific one — Pinterest has 4 boards,
+     so «Pinterest» alone is ambiguous; confirm the exact board/`account_id` before publishing.
+   - WHEN: «сейчас» → publish now; a time → schedule. Times are always **МСК / Moscow (`+03:00`)** —
+     pass `--post-at` as ISO with the offset, e.g. `2026-07-02T10:00:00+03:00`. The helper also
+     defaults to `+03:00` when you omit `--post-at`.
    Completion: target `account_ids` and `post_at` (or "now") are known.
 
 3. Publish (or draft).
    - Attach images with `--image-url` (the helper uploads each and gets a `file_id`) or `--file-id`.
+   - **Image order = the order of `--image-url` = the order they appear in the post.** The helper
+     uploads sequentially and keeps that order in `file_ids`; PostMyPost shows images in `file_ids`
+     order. So pass the **product card first** — take the draft's `images` in array order
+     (`images[0]` is `role:"card"`, `images[1]` is `role:"raw"`). Never let the card land second.
    - Default is a draft. Publish live only on explicit user confirmation, adding `--status 5 --confirm-publish`.
    - Scheduled: keep the future `--post-at`; for autoposting by cron use draft/scheduled + stage 6.
    Completion: helper returns a publication `id` and `publication_status`.
 
 4. Record the outcome in the content draft.
-   - Update the `content_drafts` row: `status` (`scheduled`/`published`/`failed`), `scheduled_at`,
-     and the publication id/links in `publication_links`.
-   Completion: the draft reflects what happened.
+   - **Update the existing `content_drafts` row in place — never insert a new one.** Use the
+     content-studio helper's `update-draft` command (it does an `UPDATE ... WHERE id=`), do not
+     re-run `save-draft` and do not hand-write raw psql. This keeps one row per post.
+   - Set `status` (`scheduled`/`published`/`failed`), `scheduled_at` (the МСК time; also set it for a
+     scheduled post so stage-6 cron sees it), and record the publication id/links in `publication_links`
+     with `--append-links` (so several networks accumulate rather than overwrite).
+
+   ```bash
+   python <content-studio>/scripts/content_studio.py update-draft --id 16 \
+     --status published --scheduled-at "2026-07-02T10:00:00+03:00" \
+     --publication-links '[{"id":30811163,"network":"instagram","account_id":2180775}]' --append-links
+   ```
+
+   On failure: `update-draft --id <id> --status failed --notes "<why it failed>"`.
+   Completion: the same draft row reflects what happened.
 
 ## Helper Commands
 
@@ -130,6 +156,14 @@ python scripts/postmypost.py delete --publication-id 30808023 --account-id 21807
 
 2. Posting to Pinterest without a title.
    Fix: give `--title` (and usually `--link`) for pinterest accounts.
+
+2a. Guessing which account when a network has several.
+   Fix: Pinterest has 4 boards — ask the user which one (or suggest the board matching the product)
+   and publish to that exact `account_id`, never to all Pinterest boards by default.
+
+2b. Card ends up second in the post.
+   Fix: image order follows the order of `--image-url` (the helper preserves it in `file_ids`). Pass the
+   card first — iterate the draft's `images` in array order, where `images[0]` is the `role:"card"` card.
 
 3. Losing the outcome.
    Fix: after publishing, update the `content_drafts` row (status, scheduled_at, publication_links).

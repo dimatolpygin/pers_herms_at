@@ -1,7 +1,7 @@
 ---
 name: content-studio
 description: Use whenever the user wants a social-media or marketing post — Russian triggers like «создай пост», «сделай пост», «пост про …», «нужен пост с картинкой/фото», «пост по ссылке» (including Tilda product pages), even without a link and even if they ask for a single version. Produces the post text (usually 3 versions) and generates the post image(s) through kie.ai. This skill OWNS post-image generation — use it instead of the built-in image_generate. For Tilda/product links it also extracts product photos and builds a marketplace product card, then saves the draft to the content table and returns its id.
-version: 1.2.0
+version: 1.3.0
 author: Hermes Agent Project
 license: MIT
 required_environment_variables:
@@ -90,13 +90,27 @@ publication skill/stage.
 
 ## Workflow
 
-1. Understand the source.
+1. Understand the source AND the target.
+   - **Ask WHERE and WHEN before drafting** (unless the user already said): which social networks
+     (client has Instagram, Telegram, VK, Pinterest) and what date/time in **МСК / Moscow time**
+     (or «сейчас»). Knowing the platform up front shapes the text — Pinterest wants a title + link,
+     Telegram tolerates longer copy, Instagram needs an image. Keep this to one short question.
+   - **Pick platforms in two separate steps, not one bundled question.**
+     - Step 1: ask where to post — offer **Telegram, VK, Instagram, Pinterest** or **«все сразу»**;
+       the user may select several. Do NOT default to all platforms — cross-post everywhere only if
+       the user explicitly picks «все сразу».
+     - Step 2 (only if Pinterest is among the picks): ask, as a **separate** question, which board —
+       4 options: «Вазы и кашпо напольные», «Авторские лампы и торшеры», «Мастерская авторской керамики
+       LOVA CERAMICS», «Products» (you may suggest the one matching the product). Do not fold the
+       Pinterest boards into the step-1 network list.
+     - The exact account names/ids come from the `postmypost` skill (`accounts`).
    - Free-form brief: extract topic, product/service, target audience, offer, tone, platform, and CTA.
    - URL/Tilda: call `extract-url` first, then summarize the useful page substance. `extract-url` also
      returns an `images` list — the page's product photos (og:image first; Tilda logos/favicons are
      filtered out). Keep the first one or two image URLs for the image step.
-   - If the brief is too sparse to produce a meaningful post, ask one focused follow-up.
-   Completion: enough data exists to draft the post.
+   - If the brief is too sparse to produce a meaningful post, fold the missing bits into that same
+     follow-up question.
+   Completion: enough data exists to draft the post, and target `platforms` + timing (МСК, or «сейчас») are known.
 
 2. Draft 3 distinct text versions in Russian.
    - Version 1: practical/direct.
@@ -162,6 +176,14 @@ publication skill/stage.
 6. Save the draft.
    - Put the full ordered post gallery in `images` (Mode A: `[{role:"card",...},{role:"raw",url:photo2}]`).
      Keep the primary `image_url`/`image_path` = the main/card image.
+   - Save the answers from step 1 in a **cron-ready** shape:
+     - `platforms` must carry the concrete **PostMyPost account ids**, not bare network names —
+       stage 6 posts by cron with NO LLM, so the row itself has to say exactly where to publish.
+       Resolve the chosen networks/board to account ids via the `postmypost` skill (`accounts`) and
+       store each as an object: `{"network": "pinterest", "account_id": 2180768, "name": "Вазы и кашпо напольные"}`.
+       `["pinterest"]` (a plain name) is NOT enough — a Pinterest name is ambiguous across 4 boards.
+     - `scheduled_at` as an ISO datetime in **МСК** (`+03:00`, e.g. `2026-07-02T10:00:00+03:00`). For
+       «сейчас» leave `scheduled_at` null — the publish step posts immediately.
    - If the user already selected a version, set `selected_version`.
    - If not, save `selected_version: 1` only when the user asked to save immediately; otherwise ask.
    - Run `save-draft` or `prepare --save` **with `--require-postgres`** for this project, so the
@@ -200,6 +222,15 @@ Save a prepared draft:
 python scripts/content_studio.py save-draft --spec draft.json --require-postgres
 ```
 
+Update an existing draft in place — the publish write-back (status, time, publication links). Always
+UPDATE the same row by id instead of saving a new one:
+
+```bash
+python scripts/content_studio.py update-draft --id 16 \
+  --status published --scheduled-at "2026-07-02T10:00:00+03:00" \
+  --publication-links '[{"id":30811163,"network":"instagram","account_id":2180775}]' --append-links
+```
+
 Combined image + save:
 
 ```bash
@@ -233,7 +264,7 @@ draft = {
     ],
     "selected_version": 1,
     "image_prompt": "создать обложку для - \"ремонт квартиры под ключ, светлая комната, главный заголовок 'РЕМОНТ ПОД КЛЮЧ'\". стиль ютуб обложка. текста на обложке русские. надо учесть что обложка будет отображаться маленькой, поэтому сделай крупный читаемый текст, 2–4 слова максимум, без мелких деталей. Главный текст должен читаться даже при уменьшении до 160 px по ширине.",
-    "platforms": ["instagram"]
+    "platforms": [{"network": "instagram", "account_id": 2180775, "name": "lova_ceramics"}]
 }
 spec_path = artifacts / "draft_spec.json"
 spec_path.write_text(json.dumps(draft, ensure_ascii=False), encoding="utf-8")
@@ -278,7 +309,10 @@ Required fields:
     {"role": "card", "url": "https://.../card.png", "path": "C:\\Users\\...\\card.png"},
     {"role": "raw", "url": "https://static.tildacdn.com/stor.../photo2.jpg"}
   ],
-  "platforms": ["instagram"],
+  "platforms": [
+    {"network": "instagram", "account_id": 2180775, "name": "lova_ceramics"},
+    {"network": "pinterest", "account_id": 2180768, "name": "Вазы и кашпо напольные"}
+  ],
   "scheduled_at": null
 }
 ```
