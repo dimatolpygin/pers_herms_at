@@ -4,9 +4,9 @@
 > прочтения **обязательно** сверить с реальностью: `git tag -l "stage-*"`,
 > `git log --oneline -20` — таблица ниже может быть устаревшей.
 
-**Последнее обновление**: 2026-07-01 (этап 5: helper PostMyPost собран и провалидирован как черновик)
-**Текущий этап**: Этап 5 — Навык публикации через PostMyPost (куда/когда) (🚧 в работе)
-**Следующий шаг**: (1) диалог навыка «куда/когда» в Telegram поверх черновика content-studio + запись статуса/ссылки/`scheduled_at` в `content_drafts`; (2) живой тест публикации (`--status 5 --confirm-publish`) — **только с явного разрешения человека** (пока держим статус 4 = черновик). Helper и API готовы.
+**Последнее обновление**: 2026-07-01 (этап 5 закрыт: живая публикация + write-back в БД проверены)
+**Текущий этап**: Этап 6 — Автопостинг по расписанию (cron-обвязка) (☐ не начат)
+**Следующий шаг**: cron-скрипт, который берёт из `content_drafts` записи со `status=scheduled` и наступившим `scheduled_at` → публикует через PostMyPost helper (`--status 5 --confirm-publish`) по `platforms[].account_id` → обновляет строку (`update-draft --status published --append-links`). Без LLM, идемпотентно. Всё готово в БД: `platforms[].account_id`, `scheduled_at` (МСК), `images`.
 
 ---
 
@@ -21,7 +21,7 @@
 | 2 | Долгосрочная память | ✅ | `stage-2-done` | `fa0fde4` | 2026-06-28 |
 | 3 | Навык «код и тексты» (docx/csv) | ✅ | `stage-3-done` | `85a78e4` | 2026-06-29 |
 | 4 | Навык «контент»: текст + картинка (гибко) | ✅ | `stage-4-done` | `dda0bf2` | 2026-07-01 |
-| 5 | Навык публикации PostMyPost (куда/когда) | 🚧 | `stage-5-done` | — | — |
+| 5 | Навык публикации PostMyPost (куда/когда) | ✅ | `stage-5-done` | — | 2026-07-01 |
 | 6 | Автопостинг по расписанию (cron-обвязка) | ☐ | `stage-6-done` | — | — |
 | 7 | Деплой на VPS | ☐ | `stage-7-done` | — | — |
 
@@ -29,11 +29,20 @@
 
 ## Активная работа
 
-Этап 4 закрыт (тег `stage-4-done`, 2026-07-01). **Этап 5 (PostMyPost) в работе — helper готов и провалидирован вживую как черновик.** Доступы в `postmypost.txt`/`.env` (вне git), блокер снят. Собран навык `hermes-skills/social-publishing/postmypost` + helper `postmypost.py` (dependency-light): команды `accounts`/`upload`(по URL→`file_id`)/`publish`/`delete`. База `https://api.postmypost.io/v4.1`, Bearer. Чистый API-референс — `docs/08_POSTMYPOST_API.md`. **Защита**: по умолчанию `publication_status=4` (черновик); живой пост (`5`) только с `--confirm-publish`. Проверено вживую в боевом проекте 349678 **только черновиками** (ничего не опубликовано): 7 аккаунтов, upload→`file_id 50782229`, publish→черновик `id 30808023` (status 4), delete→убрано; полный круг create+delete через helper → 0 публикаций. Осталось: диалог «куда/когда» в Telegram + запись статуса/ссылки в `content_drafts`, и живой тест публикации с разрешения человека.
+Этап 5 закрыт (тег `stage-5-done`, 2026-07-01). **Начинаем этап 6 (автопостинг по крону).** Навык `postmypost` + helper `postmypost.py` (accounts/upload/publish/delete, draft-safe: `--status 5 --confirm-publish` для живого поста). Диалог «куда/когда (МСК)» отработан вживую двухшагово (площадки → доска Pinterest → время). Живой пост подтверждён Kira: Instagram (pub `30811163`) и Pinterest (pub `30810668`).
 
-Установлен навык (копия в `%LOCALAPPDATA%\hermes\skills\social-publishing\postmypost`). Env passthrough: `POSTMYPOST_TOKEN`/`POSTMYPOST_PROJECT_ID` объявлены во фронтматтере навыка (как у content-studio).
+**Что готово в БД для крона (этап 6):**
+- `content_drafts.platforms` теперь хранит объекты `{network, account_id, name}` — крон берёт числовой `account_id` (не имя сети) и постит без LLM.
+- `scheduled_at` (timestamptz, МСК) — заполняется у запланированных постов; `status` (`scheduled`→`published`/`failed`); `publication_links` — массив `{id, network, account_id, post_at}`.
+- Write-back после публикации — командой `content_studio.py update-draft --id … --status … --scheduled-at … --publication-links … --append-links` (UPDATE строки на месте, **не** новый INSERT). Массив-безопасная дозапись ссылок. Это убрало дубль-строки и незаполненный `scheduled_at`.
 
-**На будущее для этапа 5+ (важные факты из этапа 4)**:
+**Порядок картинок:** позиция в посте = порядок `--image-url` (helper грузит последовательно, сохраняет порядок в `file_ids`). Карточка идёт первой, т.к. `images[0]=role:card`.
+
+**Критерий 4 (ошибка публикации) — живьём не проверяли по решению Kira.** Механизм есть: helper бросает `PostMyPostError` с деталью, статус пишется `update-draft --status failed`.
+
+Установлены копии навыков в `%LOCALAPPDATA%\hermes\skills\...`. Env passthrough: `POSTMYPOST_TOKEN`/`POSTMYPOST_PROJECT_ID` во фронтматтере. **SOUL.md** (вне git) содержит правила: спроси куда/когда (МСК) до составления, площадки по отдельности (не комбо, не кросспостинг по умолчанию), Pinterest — уточнять доску, сохранять `account_id`. При деплое (этап 7) перенести SOUL.md на сервер.
+
+**Важные факты (из этапа 4)**:
 - Пост может нести **несколько картинок** — они лежат в `hermes_agent.content_drafts.images` (JSONB-массив `{role,url,path}`), плюс основная в `image_url`/`image_path`. Для Tilda: `role=card` (сгенерированная карточка) + `role=raw` (живое фото). Постинг должен брать всю галерею.
 - Поле `scheduled_at` (timestamptz) в таблице уже есть — этап 5 его заполняет, этап 6 (cron) по нему постит. Статусы: `draft/previewed/approved/scheduled/published/failed/cancelled`.
 - **SOUL.md** (вне git, `%LOCALAPPDATA%\hermes\SOUL.md`) содержит правило маршрутизации на навык `content-studio` и запрет встроенного `image_generate`/FAL. При деплое (этап 7) SOUL.md надо перенести на сервер.
@@ -45,13 +54,19 @@
 
 ## Известные блокеры
 
-- **PostMyPost (этап 5) — РАЗБЛОКИРОВАН 2026-07-01**: аккаунт активен, доступы в `postmypost.txt` (вне git): `project_id=349678`, Bearer-токен, 7 подключённых соцсетей (ВК LOVA ceramics, 4 Pinterest, Instagram lova_ceramics, Telegram LOVA ceramics). Осторожно: живая публикация идёт в реальные соцсети клиента — тестовые посты только с явного разрешения.
+- **PostMyPost — этап 5 закрыт 2026-07-01**: аккаунт активен, доступы в `postmypost.txt` (вне git): `project_id=349678`, Bearer-токен, 7 соцсетей (ВК LOVA ceramics, 4 доски Pinterest, Instagram lova_ceramics, Telegram LOVA ceramics). Живая публикация идёт в реальные соцсети клиента — по-прежнему тестовые посты только с явного разрешения.
 - **Прод-ключ OpenRouter (этап 7)**: сейчас стоит dev-ключ Анастасии; на прод нужен инференс-ключ с аккаунта клиента.
 - **Локальный `hermes.exe` в Codex sandbox**: без escalation CLI может падать с `No Python at "C:\Users\GigaChat\AppData\Local\Programs\Python\Python311\python.exe"`, потому что sandbox не видит базовый Python venv. Вне sandbox Hermes CLI работает: `Hermes Agent v0.17.0`, Python 3.11.9; `skill_view` видит `content-studio` (CLI session `20260629_231213_e24de7`).
 
 _Архитектурное правило (актуально для всех этапов): сервер 1 ядро/1 ГБ → никакого локального инференса. STT=Groq API, vision=OpenRouter API (решено и внедрено на этапе 1)._
 
 ## История закрытий
+
+2026-07-01 — Этап 5: Навык публикации PostMyPost (куда/когда) — tag `stage-5-done`.
+Навык `hermes-skills/social-publishing/postmypost` (helper `postmypost.py`, dependency-light) + write-back через новую команду `content_studio.py update-draft`. Диалог «куда/когда (МСК)» двухшаговый: площадки по отдельности (ТГ/ВК/Инста/Pinterest или «все сразу», без кросспостинга по умолчанию) → если Pinterest, отдельным вопросом доска (4 шт) → время МСК/«сейчас». Порядок картинок = порядок `--image-url` (карточка первой).
+**Верификация**: Kira подтвердила вживую (2026-07-01) — агент запросил площадки/доску/время и опубликовал реально: Instagram (pub `30811163`), Pinterest «Вазы и кашпо» (pub `30810668`). Машинно: `content_drafts` строки 15/16 = `status=published`, `platforms[].account_id`, `publication_links` с id. ROADMAP критерии 1–3 `[x]`.
+**Косяки по ходу, исправлены**: (1) write-back создавал **новую** строку вместо UPDATE → дубль-запись; добавлена команда `update-draft` (UPDATE по id, массив-безопасная дозапись ссылок). (2) `scheduled_at` не заполнялся у запланированных постов → `update-draft --scheduled-at`. Оба нужны крону этапа 6.
+**Не закрыто**: критерий 4 (ошибка публикации → status failed) — живьём не проверяли по решению Kira; механизм готов.
 
 2026-07-01 — Этап 4: Навык «контент» (текст + картинка, гибко) — tag `stage-4-done`.
 Локальный Hermes skill `content-studio` (исходник `hermes-skills/marketing/content-studio`, установл. копия в `%LOCALAPPDATA%\hermes\skills`). Миграции `0001` (таблица `hermes_agent.content_drafts`) и `0002` (поле `images`), применены в Docker Postgres `postgres16`/`mydb`. Helper без сторонних зависимостей: extract-url (текст + фото товара, `/stor` vs `/tild` фильтр), kie.ai text-to-image (обложка) и **image-to-image** (`gpt-image-2-image-to-image`, карточка товара из фото), сохранение в Postgres через `CONTENT_PSQL_COMMAND`.
