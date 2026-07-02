@@ -418,6 +418,23 @@ def normalize_images(spec: dict[str, Any], image_url: str, image_path: str) -> l
     return items
 
 
+def _scheduled_in_future(value: str) -> bool:
+    """True if scheduled_at is a parseable timestamp in the future.
+
+    Used to auto-promote a draft to 'scheduled'. On a parse failure we assume
+    scheduling intent (a time WAS given), so we return True rather than silently
+    leaving the post stuck in 'draft'.
+    """
+    from datetime import datetime, timezone
+    try:
+        dt = datetime.fromisoformat(str(value).strip())
+    except (ValueError, TypeError):
+        return True
+    if dt.tzinfo is None:
+        return dt > datetime.now()
+    return dt > datetime.now(timezone.utc)
+
+
 def normalize_record(spec: dict[str, Any], *, allow_missing_image: bool) -> dict[str, Any]:
     versions = normalized_versions(spec)
     topic = clean_text(spec.get("topic") or spec.get("title") or spec.get("product_name") or spec.get("subject"))
@@ -435,7 +452,7 @@ def normalize_record(spec: dict[str, Any], *, allow_missing_image: bool) -> dict
     selected_version = int(selected) if selected else 1
     if selected_version < 1 or selected_version > len(versions):
         raise ContentStudioError("selected_version must be a 1-based index inside text_versions")
-    return {
+    record = {
         "source_type": source_type,
         "source_value": source_value or None,
         "topic": topic,
@@ -454,6 +471,20 @@ def normalize_record(spec: dict[str, Any], *, allow_missing_image: bool) -> dict
         "publication_links": spec.get("publication_links") or {},
         "notes": clean_text(spec.get("notes")) or None,
     }
+    # Deterministic scheduling — fixes "post stuck in 'draft', cron never fires".
+    # If the user picked target platforms AND a future send time, the intent is to
+    # schedule: force status='scheduled' so the stage-6 cron publishes it, instead of
+    # relying on the model to set it (which it does unreliably). Immediate posts (no
+    # future time) are published directly by the postmypost skill and keep their
+    # status. Explicit terminal statuses (published/failed/cancelled) are respected.
+    if (
+        record["platforms"]
+        and record["scheduled_at"]
+        and record["status"] in ("draft", "previewed", "approved")
+        and _scheduled_in_future(record["scheduled_at"])
+    ):
+        record["status"] = "scheduled"
+    return record
 
 
 def db_dsn() -> str | None:
