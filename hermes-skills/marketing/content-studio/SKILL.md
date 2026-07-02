@@ -1,7 +1,7 @@
 ---
 name: content-studio
-description: Используй, когда пользователь хочет пост для соцсетей или маркетинговый пост — триггеры «создай пост», «сделай пост», «пост про …», «нужен пост с картинкой/фото», «пост по ссылке» (включая товарные страницы Tilda), даже без ссылки и даже если просят один вариант. Создаёт текст поста (обычно 3 версии) и генерирует картинку(и) через kie.ai. Этот навык ОТВЕЧАЕТ за генерацию картинок для постов — используй его вместо встроенного image_generate. Для ссылок Tilda/товаров также извлекает фото товара и собирает карточку для маркетплейса, затем сохраняет черновик в таблицу контента и возвращает его id.
-version: 1.3.0
+description: Используй, когда пользователь хочет пост для соцсетей или маркетинговый пост — триггеры «создай пост», «сделай пост», «пост про …», «нужен пост с картинкой/фото», «пост по ссылке» (включая товарные страницы Tilda), даже без ссылки и даже если просят один вариант. Создаёт текст поста (обычно 3 версии) и подбирает картинки. Для ссылок Tilda/товаров берёт первые до 2 фото с сайта КАК ЕСТЬ, без генерации и без карточки. Без ссылки всегда спрашивает «картинку свою скинете или сгенерировать?» и рисует обложку через kie.ai ТОЛЬКО если пользователь выбрал «сгенерировать». Этот навык ОТВЕЧАЕТ за картинки постов — используй его вместо встроенного image_generate. Затем сохраняет черновик в таблицу контента и возвращает его id.
+version: 1.4.0
 author: Hermes Agent Project
 license: MIT
 required_environment_variables:
@@ -33,8 +33,10 @@ This skill prepares social content drafts for the Hermes client workflow:
 
 - Accepts a free-form brief or a URL, including Tilda pages.
 - Produces 3 distinct text versions for the post.
-- Generates a visual through kie.ai `gpt-image-2-text-to-image`.
-- Shows a preview in chat: 3 text versions + image.
+- Images: for a product link, uses the **first up to 2 site photos as-is** (no generation, no card);
+  with no link, asks the user **«картинку свою скинете или сгенерировать?»** and only generates a cover
+  via kie.ai `gpt-image-2-text-to-image` when the user chooses to generate.
+- Shows a preview in chat: 3 text versions + image(s).
 - Saves the selected draft into the content table and returns the draft id.
 
 Use the bundled `scripts/content_studio.py` helper for external operations. The LLM should draft
@@ -120,62 +122,57 @@ publication skill/stage.
    - Keep platform constraints in mind if the user named a platform.
    Completion: 3 clearly different versions are ready.
 
-3. Choose the image strategy. Two modes:
+3. Choose the image(s). The client's rule has two cases — decide strictly by whether a product link was given:
 
-   **Mode A — marketplace product card from the link (image-to-image).** This is the client's "Вариант 3".
-   The post carries **two images, and only the first photo is sent to kie.ai**:
-   - **Photo 1 → a marketplace product card** (the single `--input-url` to `gpt-image-2-image-to-image`).
-   - **Photo 2 → used as-is**, the raw product photo, with no kie.ai call. Keep its URL/path for the post.
-   - The final post = generated card + untouched photo 2. If the page has only one photo, make the card
-     from it and skip the second image.
+   **Case A — the user gave a product link (Tilda / website): use the site's OWN photos AS-IS.**
+   This is the client's "Вариант 3". **No generation, no kie.ai, no marketplace card here.**
+   - Take the **first up to 2 photos** from `extract-url`'s `images` list, in page order, unchanged.
+   - If the page has 4 photos → use the first 2. If it has 3 → first 2. If it has only 1 → use that 1.
+     If it has 0 usable photos (all filtered as logos/favicons) → fall back to Case B (ask the user).
+   - Each chosen photo goes into the post as a **raw** image (`role:"raw"`), keeping page order. Do NOT
+     edit, crop, or send them to kie.ai — they are the final post images as-is.
 
-   Build the card from real page data. Read specs out of the `extract-url` text (brand, product type,
-   size, material, purpose, handmade, etc.) and compose an infographic listing like Wildberries/Ozon,
-   modeled on the client's reference:
-   - Keep the real product unchanged on a clean light-gray gradient background with rounded corners.
-   - Small brand name at top (e.g. «LOVA CERAMICS»).
-   - A very large bold Russian headline = product type (e.g. «ВАЗА») with a smaller subtitle (e.g. «керамическая»).
-   - A left column of 3–4 short spec bullets from the page (e.g. «Высота 23 см», «Материал керамика»,
-     «Для цветов и сухоцветов», «Ручная работа»).
-   - A framed feature badge at the bottom (e.g. «Подходит к любому интерьеру»).
-   - All text in Russian; vertical `3:4` or `4:5`. image-to-image renders Cyrillic reliably.
+   **Case B — no link / unclear where the image should come from: ALWAYS ask the user first.**
+   Ask exactly one short question and wait for the answer:
 
-   Prompt skeleton (RU): «Сделай из этого фото карточку товара для маркетплейса в вертикальном формате.
-   Сохрани реальный товар без изменений справа, чистый светло-серый градиентный фон со скруглёнными
-   углами. Сверху слева мелкий бренд "<БРЕНД>". Под ним очень крупный жирный заголовок "<ТИП ТОВАРА>" и
-   помельче "<подзаголовок>". Слева столбцом характеристики: "<п1>", "<п2>", "<п3>", "<п4>". Внизу слева
-   бейдж в рамке "<преимущество>". Все надписи на русском, чёткие, премиальный минимализм.»
+   > **«Картинку свою скинете или сгенерировать?»**
 
-   **Mode B — cover from scratch (text-to-image).** Use for free-form briefs with no usable product
-   photo. Build a YouTube-thumbnail-style cover with on-image Russian text. Wrap your concrete visual
-   brief in this exact template — keep the wording, replace only the inner `...`:
+   - If the user **sends their own photo** → upload it with the `s3-upload` skill and use the returned
+     public URL as a **raw** image (`role:"raw"`). Do NOT call kie.ai.
+   - If the user says **«сгенерировать» / «генерируй»** → this is the **only** case kie.ai is used.
+     Generate a YouTube-thumbnail-style cover via kie.ai **text-to-image**. Wrap your concrete visual
+     brief in this exact template — keep the wording, replace only the inner `...`:
 
-   ```
-   создать обложку для - "<краткое описание сцены/темы + главный заголовок 2–4 слова>". стиль ютуб обложка. текста на обложке русские. надо учесть что обложка будет отображаться маленькой, поэтому сделай крупный читаемый текст, 2–4 слова максимум, без мелких деталей. Главный текст должен читаться даже при уменьшении до 160 px по ширине.
-   ```
+     ```
+     создать обложку для - "<краткое описание сцены/темы + главный заголовок 2–4 слова>". стиль ютуб обложка. текста на обложке русские. надо учесть что обложка будет отображаться маленькой, поэтому сделай крупный читаемый текст, 2–4 слова максимум, без мелких деталей. Главный текст должен читаться даже при уменьшении до 160 px по ширине.
+     ```
 
-   - Choose a punchy 2–4 word Russian headline that matches the post and name it inside the brief.
-   - Keep the scene bold and simple: one clear subject, high contrast, no fine detail.
-   - Aspect ratio: default `16:9` for the cover look; use `1:1` for a square feed post or `9:16` for stories/reels.
-   Completion: Mode A has 1–2 product photo URLs ready, or Mode B has a cover prompt with a clear headline.
+     - Choose a punchy 2–4 word Russian headline that matches the post and name it inside the brief.
+     - Keep the scene bold and simple: one clear subject, high contrast, no fine detail.
+     - Aspect ratio: default `16:9`; use `1:1` for a square feed post or `9:16` for stories/reels.
 
-4. Generate the image(s) through kie.ai.
-   - Mode A: `generate-image --prompt "<card prompt with specs>" --input-url <photo1> --aspect-ratio 3:4`.
-     Only photo 1 goes to kie.ai (the card). Photo 2 stays raw — do NOT send it. The post uses both.
-   - Mode B: `generate-image --prompt "<cover prompt>"` or `prepare --generate-image` (text-to-image).
-   - The helper calls `createTask`, polls `recordInfo`, downloads the first result URL, and reports the `model`.
-   Completion: result JSON has `image_url` and preferably `image_path` for each image.
+   Completion: Case A has 1–2 raw site-photo URLs; Case B has either the user's uploaded photo URL or a
+   generated cover. kie.ai is touched ONLY in Case B when the user explicitly chose «сгенерировать».
+
+4. Prepare the image(s).
+   - **Case A (link): nothing to generate.** Keep the 1–2 raw site-photo URLs from step 3 as-is.
+   - **Case B, user photo:** upload it via the `s3-upload` skill and keep the returned public URL. No generation.
+   - **Case B, «сгенерировать»:** `generate-image --prompt "<cover prompt>"` or `prepare --generate-image`
+     (text-to-image). The helper calls `createTask`, polls `recordInfo`, downloads the first result URL,
+     and reports the `model`. This is the only kie.ai call in the whole skill.
+   Completion: every post image has a URL (and, for a generated cover, preferably a local `image_path`).
 
 5. Preview in chat.
    - Show the 3 versions as numbered options.
-   - Include every post image. On Telegram, add one `MEDIA:<absolute image_path>` line per image — in
-     Mode A that is the generated card first, then the raw photo 2. Use `image_path` when present.
+   - Include every post image. On Telegram, add one `MEDIA:<absolute image_path or URL>` line per image —
+     Case A: the 1–2 raw site photos in page order; Case B: the user's photo or the generated cover.
    - Ask which version to save/publish later if the user has not selected one.
    Completion: the user can see the options and all post images.
 
 6. Save the draft.
-   - Put the full ordered post gallery in `images` (Mode A: `[{role:"card",...},{role:"raw",url:photo2}]`).
-     Keep the primary `image_url`/`image_path` = the main/card image.
+   - Put the full ordered post gallery in `images` (Case A: `[{role:"raw",url:photo1},{role:"raw",url:photo2}]`,
+     the first 1–2 site photos in page order; Case B: `[{role:"raw",...}]` user photo, or `[{role:"card",...}]`
+     generated cover). Keep the primary `image_url`/`image_path` = the first image.
    - Save the answers from step 1 in a **cron-ready** shape:
      - `platforms` must carry the concrete **PostMyPost account ids**, not bare network names —
        stage 6 posts by cron with NO LLM, so the row itself has to say exactly where to publish.
@@ -202,19 +199,16 @@ URL extraction (returns text + `images` = product photos, og:image first):
 python scripts/content_studio.py extract-url "https://example.com/page" --max-images 4
 ```
 
-Image generation — Mode B, text-to-image cover:
+Image generation — Case B only (used solely when the user chose «сгенерировать»), text-to-image cover:
 
 ```bash
 python scripts/content_studio.py generate-image --prompt "..." --aspect-ratio 16:9
 ```
 
-Image edit — Mode A, image-to-image (marketplace product card from photo 1):
-
-```bash
-python scripts/content_studio.py generate-image \
-  --prompt "Карточка товара для маркетплейса: сохрани реальный товар, светло-серый градиентный фон со скруглёнными углами, бренд \"LOVA CERAMICS\", крупный заголовок \"ВАЗА\" / \"керамическая\", характеристики слева \"Высота 23 см\", \"Материал керамика\", \"Для цветов и сухоцветов\", \"Ручная работа\", бейдж \"Подходит к любому интерьеру\"" \
-  --input-url "https://static.tildacdn.com/stor.../photo1.jpg" --aspect-ratio 3:4
-```
+Product link (Case A): **no image command at all** — `extract-url` already returns the site photos;
+take the first up to 2 URLs from its `images` list and use them raw. Do not call `generate-image`.
+(The helper still supports `generate-image --input-url` for image-to-image, but the client's current
+policy does NOT use marketplace-card generation — links use the real site photos as-is.)
 
 Save a prepared draft:
 
@@ -306,7 +300,7 @@ Required fields:
   "image_url": "https://...",
   "image_path": "C:\\Users\\...\\image.png",
   "images": [
-    {"role": "card", "url": "https://.../card.png", "path": "C:\\Users\\...\\card.png"},
+    {"role": "raw", "url": "https://static.tildacdn.com/stor.../photo1.jpg"},
     {"role": "raw", "url": "https://static.tildacdn.com/stor.../photo2.jpg"}
   ],
   "platforms": [
@@ -317,8 +311,9 @@ Required fields:
 }
 ```
 
-`image_url`/`image_path` may be filled by `prepare --generate-image`. `images` is the ordered post
-gallery (Mode A: generated card + raw photo 2); when omitted it defaults to the single primary image.
+`image_url`/`image_path` may be filled by `prepare --generate-image` (Case B generate only). `images`
+is the ordered post gallery (Case A: the first 1–2 raw site photos; Case B: the user's photo or the
+generated cover); when omitted it defaults to the single primary image.
 
 ## Output Contract
 
@@ -365,16 +360,17 @@ Use the exact `id`, `image_url`, and `image_path` returned by the helper.
 5. Publishing immediately.
    Fix: stage 4 only prepares and saves drafts. PostMyPost publication is stage 5.
 
-6. Inventing a picture for a product link.
-   Fix: when `extract-url` returned `images`, prefer Mode A (image-to-image on the real product photo)
-   over Mode B (cover from scratch). The client wants the actual product, background extended.
+6. Generating anything for a product link.
+   Fix: for a link, use the **first up to 2 real site photos as-is** (Case A) — never generate, never
+   build a marketplace card, never call kie.ai. kie.ai is only for Case B when the user explicitly
+   chose «сгенерировать».
 
 ## Verification Checklist
 
 - [ ] Free-form brief produces 3 distinct Russian text versions.
 - [ ] URL/Tilda extraction returns page title/description/text and the final texts reflect the page.
 - [ ] URL/Tilda extraction returns `images` (product photos, no logos/favicons).
-- [ ] Mode A: photo 1 → marketplace card (brand, big headline, 3–4 real spec bullets, feature badge), photo 2 kept raw; only photo 1 sent to kie.ai.
-- [ ] Mode B: text-to-image cover returns an image URL and the helper downloads a local file.
+- [ ] Case A (link): first up to 2 site photos used as-is (4→2, 1→1); nothing sent to kie.ai; no card.
+- [ ] Case B (no link): agent asks «картинку свою скинете или сгенерировать?»; user photo → s3-upload raw; «сгенерировать» → text-to-image cover.
 - [ ] `save-draft --require-postgres` returns `backend: "postgres"` and an integer draft id.
 - [ ] Telegram preview includes 3 texts and the generated image.
