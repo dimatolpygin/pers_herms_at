@@ -1,6 +1,6 @@
 ---
 name: business-documents
-description: Use when the user asks to create a commercial proposal/KP in .docx or a tabular report in .csv and expects a ready file attachment, especially in Telegram. Draft the real content, generate the file via the bundled script, then return the absolute path or MEDIA: tag.
+description: Используй, когда пользователь просит сделать коммерческое предложение/КП в .docx или табличный отчёт в .csv и ждёт готовый файл вложением, особенно в Telegram. Составь реальное содержание, сгенерируй файл прилагаемым скриптом, затем верни абсолютный путь к файлу или тег MEDIA:.
 version: 1.0.0
 author: Hermes Agent Project
 license: MIT

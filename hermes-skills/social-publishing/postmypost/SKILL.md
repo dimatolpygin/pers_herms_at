@@ -1,6 +1,6 @@
 ---
 name: postmypost-publish
-description: Use when the user wants to publish or schedule a prepared post to social networks — Russian triggers like «запости», «опубликуй», «выложи в соцсети», «постни», «запланируй пост», «отправь в инсту/телеграм/вк/пинтерест». Takes a content draft (text + image/card from content-studio), asks WHERE (which of the connected accounts) and WHEN (now or a scheduled time), then publishes through PostMyPost. Creates a DRAFT by default; a live post requires explicit user confirmation.
+description: Используй, когда пользователь хочет опубликовать или запланировать готовый пост в соцсети — триггеры «запости», «опубликуй», «выложи в соцсети», «постни», «запланируй пост», «отправь в инсту/телеграм/вк/пинтерест». Берёт черновик контента (текст + картинку/карточку из content-studio), спрашивает КУДА (в какие из подключённых аккаунтов) и КОГДА (сейчас или на запланированное время), затем публикует через PostMyPost. По умолчанию создаёт ЧЕРНОВИК; живая публикация требует явного подтверждения пользователя.
 version: 1.1.0
 author: Hermes Agent Project
 license: MIT

@@ -1,6 +1,6 @@
 ---
 name: s3-upload
-description: Use when the user sends their OWN photo/image and wants a public link for it, or wants to use their own photo in a social post — Russian triggers like «загрузи это фото», «залей картинку в облако», «дай ссылку на это фото», «используй моё фото для поста», «вот моё фото, запости его», «сохрани картинку и дай ссылку». Uploads a local file or a remote image URL to the client's S3 bucket (Beget) and returns a stable public URL. That URL can then be reused as a `role:"raw"` image in a post (content-studio / postmypost).
+description: Используй, когда пользователь присылает СВОЁ фото/картинку и хочет получить на неё публичную ссылку, или хочет использовать своё фото в посте — триггеры «загрузи это фото», «залей картинку в облако», «дай ссылку на это фото», «используй моё фото для поста», «вот моё фото, запости его», «сохрани картинку и дай ссылку». Загружает локальный файл или картинку по URL в S3-бакет клиента (Beget) и возвращает стабильную публичную ссылку. Эту ссылку затем можно переиспользовать как картинку role="raw" в посте (content-studio / postmypost).
 version: 1.0.0
 author: Hermes Agent Project
 license: MIT

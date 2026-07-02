@@ -1,6 +1,6 @@
 ---
 name: content-studio
-description: Use whenever the user wants a social-media or marketing post — Russian triggers like «создай пост», «сделай пост», «пост про …», «нужен пост с картинкой/фото», «пост по ссылке» (including Tilda product pages), even without a link and even if they ask for a single version. Produces the post text (usually 3 versions) and generates the post image(s) through kie.ai. This skill OWNS post-image generation — use it instead of the built-in image_generate. For Tilda/product links it also extracts product photos and builds a marketplace product card, then saves the draft to the content table and returns its id.
+description: Используй, когда пользователь хочет пост для соцсетей или маркетинговый пост — триггеры «создай пост», «сделай пост», «пост про …», «нужен пост с картинкой/фото», «пост по ссылке» (включая товарные страницы Tilda), даже без ссылки и даже если просят один вариант. Создаёт текст поста (обычно 3 версии) и генерирует картинку(и) через kie.ai. Этот навык ОТВЕЧАЕТ за генерацию картинок для постов — используй его вместо встроенного image_generate. Для ссылок Tilda/товаров также извлекает фото товара и собирает карточку для маркетплейса, затем сохраняет черновик в таблицу контента и возвращает его id.
 version: 1.3.0
 author: Hermes Agent Project
 license: MIT
