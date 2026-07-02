@@ -1,0 +1,20 @@
+# systemd-юнит для Telegram-gateway Hermes.
+# __HERMES_BIN__ подставляется реальным путём к hermes при бутстрапе сервера.
+# Устанавливается в /etc/systemd/system/hermes-gateway.service.
+[Unit]
+Description=Hermes Agent Telegram gateway
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/pers_herms_at
+Environment=HERMES_ENV_FILE=/root/.hermes/.env
+ExecStart=__HERMES_BIN__ gateway --accept-hooks
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

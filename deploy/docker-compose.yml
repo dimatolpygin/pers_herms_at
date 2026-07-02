@@ -1,0 +1,26 @@
+# Postgres для Hermes — единственный контейнер на сервере.
+# Сам hermes-agent крутится НАТИВНО (systemd), не в Docker.
+# Контейнер назван фиксированно (hermes-postgres), чтобы CONTENT_PSQL_COMMAND
+# (`docker exec -i hermes-postgres psql ...`) был детерминированным — как локально.
+# Порт биндится ТОЛЬКО на localhost: наружу БД не торчит.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hermes-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-mydb}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-mydb}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
