@@ -5,7 +5,7 @@
 > `git log --oneline -20` — таблица ниже может быть устаревшей.
 
 **Последнее обновление**: 2026-07-02 (этап 11 закрыт; заменён ключ KIE; ключ OpenRouter от клиента оказался provisioning — откатан)
-**Текущий этап**: Этап 12 — Деплой на VPS (☐ не начат, в работу пока НЕ взят по решению клиента)
+**Текущий этап**: Этап 12 — Деплой на VPS (🚧 в работе с 2026-07-02). Решения: hermes **нативно + systemd**, Postgres **Docker-контейнер** (`hermes-postgres`), CI/CD через GitHub Actions (push master → SSH → `deploy/deploy.sh`). Репо публичный: `https://github.com/dimatolpygin/pers_herms_at`.
 **Следующий шаг**: деплой агента + Postgres на VPS `89.125.17.86` (Docker) через `/okdeploy`. Перенести в серверный `.env`: `TAVILY_API_KEY`, `S3_*`, новый `KIE_AI_API_KEY` (обновлён 2026-07-02, проверен) + рабочий инференс-ключ `OPENROUTER_API_KEY`; в серверный `config.yaml` — `timezone: Europe/Moscow`, `web.backend: tavily`, `terminal.env_passthrough`; перенести `SOUL.md` и cron-обвязку; переключить прод-бота `@Mironov_AgentBot` + Mika.
 
 **Смена ключей 2026-07-02 (в `.env`, вне git):** KIE_AI_API_KEY → `18e63f…` (проверен: kie.ai recordInfo отвечает 200). OpenRouter: клиент прислал `sk-or-v1-cedd8f69…` — это **provisioning-ключ** (для инференса даёт 401 "User not found", но валиден для управления ключами). Из него **сгенерирован рабочий инференс-ключ** `sk-or-v1-2ae0…` (POST `https://openrouter.ai/api/v1/keys`, имя на аккаунте `hermes-mironov-runtime-2026-07`), проверен живым chat-запросом (DeepSeek V4 Pro ответил). Поставлен в `.env`. **Теперь инференс биллится на аккаунт КЛИЕНТА** (не на dev-ключ Анастасии 0870). **Смена ключей требует рестарта gateway.** → **Блокер прод-ключа OpenRouter снят.**
@@ -32,7 +32,7 @@
 | 9 | Загрузка пользовательского фото в S3 | ✅ | `stage-9-done` | `a5fd85a` | 2026-07-01 |
 | 10 | cron-задачи (напоминания/регулярки по запросу) | ✅ | `stage-10-done` | `9504e37` | 2026-07-02 |
 | 11 | Правка своих навыков по запросу | ✅ | `stage-11-done` | `5cd2355` | 2026-07-02 |
-| 12 | Деплой на VPS | ☐ | `stage-12-done` | — | — |
+| 12 | Деплой на VPS | 🚧 | `stage-12-done` | — | — |
 
 Детальные критерии приёмки каждого этапа — в [`07_ROADMAP.md`](07_ROADMAP.md).
 
