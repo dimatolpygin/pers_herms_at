@@ -4,8 +4,10 @@
 > прочтения **обязательно** сверить с реальностью: `git tag -l "stage-*"`,
 > `git log --oneline -20` — таблица ниже может быть устаревшей.
 
-**Последнее обновление**: 2026-07-02 (этап 11 закрыт; заменён ключ KIE; ключ OpenRouter от клиента оказался provisioning — откатан)
-**Текущий этап**: Этап 12 — Деплой на VPS (🚧 сервер развёрнут и проверен машинно 2026-07-02; ждём живую UAT от Мики → потом тег `stage-12-done`). hermes **нативно + systemd**, Postgres **Docker** (`hermes-postgres`), CI/CD GitHub Actions (push master → SSH → `deploy/deploy.sh`). Репо публичный: `https://github.com/dimatolpygin/pers_herms_at`.
+**Последнее обновление**: 2026-07-16 (добавлены этапы 13–15 по правкам клиента; взят в работу этап 13 — `/balance`)
+**Текущий этап**: Этап 13 — Команда `/balance` (🚧 взят в работу 2026-07-16). Параллельно этап 12 остаётся 🚧 — сервер развёрнут и проверен машинно, **ждём живую UAT от Мики** → потом тег `stage-12-done`.
+
+**Предыдущий этап (12, не закрыт)**: Деплой на VPS (🚧 сервер развёрнут и проверен машинно 2026-07-02; ждём живую UAT от Мики → потом тег `stage-12-done`). hermes **нативно + systemd**, Postgres **Docker** (`hermes-postgres`), CI/CD GitHub Actions (push master → SSH → `deploy/deploy.sh`). Репо публичный: `https://github.com/dimatolpygin/pers_herms_at`.
 
 **Деплой 2026-07-02 (сервер `89.125.17.86`, Ubuntu 24.04, 2 ядра/2 ГБ + 2G swap):** root-пароль в `доступы.txt` был устаревшим — клиент прислал актуальный (`tWH6…`). Установлено машинно: hermes v0.18.0 (`/usr/local/bin/hermes`, дом `/root/.hermes`), gateway под systemd (`hermes-gateway.service`, active+enabled). Postgres 16 в контейнере `hermes-postgres` (порт только localhost), миграции 0001–0003 применены. Прод-`.env` (бот `@Mironov_AgentBot` `8399306789:…`, allowlist Мика `5183294551`, инференс-ключ клиента, Tavily/Groq/KIE/PostMyPost/S3) залит в `/root/.hermes/.env`. `config.yaml` пропатчен `hermes config set` (НЕ перезаписан целиком — на сервере схема v0.18 новее локальной v0.17): timezone Europe/Moscow, model deepseek/deepseek-v4-pro, web.backend tavily, stt.provider groq, vision openrouter, `terminal.env_passthrough` (KIE/CONTENT/POSTMYPOST/S3). Полный `SOUL.md` (15 КБ, правила этапов 4/5/8/9/10/11) залит. Навыки синхронизированы rsync'ом в `/root/.hermes/skills`. Cron автопостинга (`* * * * *`, venv-python, `HERMES_ENV_FILE`). **Проверено машинно:** Telegram polling connected · инференс DeepSeek V4 Pro HTTP 200 (биллинг на клиента, `is_byok:false`) · autopost `--dry-run` прошёл всю цепочку (env→docker exec psql→helpers) · postgres healthy. **Осталось:** (1) клиент добавляет GitHub Secrets → активируется автодеплой; (2) живая UAT Мики в Telegram → тег `stage-12-done`.
 **Следующий шаг**: деплой агента + Postgres на VPS `89.125.17.86` (Docker) через `/okdeploy`. Перенести в серверный `.env`: `TAVILY_API_KEY`, `S3_*`, новый `KIE_AI_API_KEY` (обновлён 2026-07-02, проверен) + рабочий инференс-ключ `OPENROUTER_API_KEY`; в серверный `config.yaml` — `timezone: Europe/Moscow`, `web.backend: tavily`, `terminal.env_passthrough`; перенести `SOUL.md` и cron-обвязку; переключить прод-бота `@Mironov_AgentBot` + Mika.
@@ -35,10 +37,39 @@
 | 10 | cron-задачи (напоминания/регулярки по запросу) | ✅ | `stage-10-done` | `9504e37` | 2026-07-02 |
 | 11 | Правка своих навыков по запросу | ✅ | `stage-11-done` | `5cd2355` | 2026-07-02 |
 | 12 | Деплой на VPS | 🚧 | `stage-12-done` | — | — |
+| 13 | Команда `/balance`: остатки на счетах | 🚧 | `stage-13-done` | — | — |
+| 14 | Память: оглавление + внешние заметки | ☐ | `stage-14-done` | — | — |
+| 15 | Модель-критик на сложных задачах | ☐ | `stage-15-done` | — | — |
 
 Детальные критерии приёмки каждого этапа — в [`07_ROADMAP.md`](07_ROADMAP.md).
 
 ## Активная работа
+
+**2026-07-16 — добавлены этапы 13–15 по правкам клиента; взят в работу этап 13 (`/balance`).**
+Три правки: (13) команда `/balance` — остатки на счетах провайдеров; (14) переделка памяти в
+«оглавление + внешние заметки» (агент сообщил о заполнении 68% и темпе ~15–20%/нед);
+(15) модель-критик Sonnet 5 на сложных задачах. Порядок выбран клиентом: баланс → память → критик.
+Этапы 13–15 идут **после** прод-деплоя, поэтому у каждого в критериях есть «работает на проде»
+(разработка локально → перенос на сервер внутри своего же этапа).
+
+**Разведка API балансов (2026-07-16, всё проверено живыми запросами)** — детали в
+[`07_ROADMAP.md`](07_ROADMAP.md), этап 13. Главное: **рантайм-ключ OpenRouter остаток НЕ отдаёт**
+(`403 Only management keys can fetch credits`) — цифра в $ доступна только management-ключом
+(проверено ключом клиента: `total_credits 48` − `total_usage 27.97` = **$20.03**). kie.ai отдаёт
+кредиты рабочим ключом (`GET /api/v1/chat/credit` → **930**). fal.ai: эндпоинт
+`GET https://api.fal.ai/v1/account/billing` существует, но у fal ключи двух скоупов (**API** и
+**Admin**), billing требует **Admin** — присланный ключ `ed9d1ac5…` это API-scope, отсюда
+`403 authorization_error`. **Нужен Admin-ключ** с fal.ai/dashboard/keys → иначе fal показывается
+честной строкой «нет прав» (правило этапа 8), остальные провайдеры работают.
+
+**Решение по секретам этапа 13**: management/admin-ключи кладём в `.env`, но **не** в
+`terminal.env_passthrough` — helper `balance.py` читает `.env` с диска сам (тот же приём, что в
+`autopost.py`), поэтому ключ, умеющий создавать API-ключи на аккаунте клиента, не попадает в
+окружение песочницы агента без необходимости.
+
+**Механика команды**: писать движок команд не нужно — меню Telegram собирается из
+`COMMAND_REGISTRY` **плюс навыки** (`telegram_menu_commands()`, лимит 60 команд), а навык
+вызывается как `/имя-навыка`. Навык `balance` = команда `/balance` в меню.
 
 **2026-07-01 — добавлены этапы 7–9 по запросу клиента, деплой перенумерован 7→10.** Этапы 7 (веб-поиск), 8 (запрет выдумок), 9 (загрузка фото в S3) закрыты в тот же день. Плюс исправлен баг проброса секретов навыков в sandbox `execute_code` (см. блок в шапке + «на деплой»).
 
