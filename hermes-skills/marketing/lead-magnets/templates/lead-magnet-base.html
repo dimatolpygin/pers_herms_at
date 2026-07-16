@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: #1a1a2e;
+    background: #fff;
+    line-height: 1.55;
+  }
+
+  /*
+    A4 at 96 DPI: 794×1123px
+    Use px, NEVER mm — wkhtmltopdf shrinks mm-based pages to ~¾
+  */
+  .page {
+    width: 794px;
+    height: 1123px;
+    padding: 0;
+    background: #fff;
+    page-break-after: always;
+    overflow: hidden;
+    position: relative;
+  }
+  .page:last-child { page-break-after: avoid; }
+
+  /* ── COVER PAGE ── */
+  .cover {
+    background: linear-gradient(135deg, #0a0e27 0%, #16213e 40%, #0f3460 100%);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+  }
+
+  .cover h1 {
+    font-size: 62px;
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -1px;
+    margin-bottom: 30px;
+  }
+  .cover h1 span { color: #00a86b; } /* accent */
+
+  .cover-subtitle {
+    font-size: 23px;
+    font-weight: 300;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 70px;
+    max-width: 520px;
+  }
+
+  /* ── CONTENT PAGE ── */
+  .content-page {
+    padding: 55px 60px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .section-intro {
+    border-left: 5px solid #00a86b;
+    padding-left: 24px;
+    margin-bottom: 38px;
+  }
+  .section-intro h2 {
+    font-size: 34px;
+    font-weight: 800;
+    margin-bottom: 10px;
+    color: #0a0e27;
+    line-height: 1.2;
+  }
+  .section-intro p {
+    font-size: 17px;
+    color: #666;
+    line-height: 1.6;
+  }
+
+  /* Cards */
+  .card-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    flex: 1;
+  }
+
+  .card {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    background: #f8f9fc;
+    border-radius: 14px;
+    padding: 24px 28px;
+  }
+
+  .card-num {
+    flex-shrink: 0;
+    width: 50px; height: 50px;
+    background: #00a86b;
+    color: #fff;
+    font-size: 24px;
+    font-weight: 800;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .card-body h3 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 7px;
+    color: #0a0e27;
+  }
+  .card-body p {
+    font-size: 16px;
+    color: #555;
+    line-height: 1.7;
+  }
+
+  /* ── CTA BLOCK ── */
+  .cta-block {
+    background: linear-gradient(135deg, #0a0e27 0%, #16213e 100%);
+    border-radius: 16px;
+    padding: 32px 40px;
+    text-align: center;
+    color: #fff;
+    margin-top: 24px;
+  }
+  .cta-block h3 {
+    font-size: 26px;
+    font-weight: 800;
+    margin-bottom: 12px;
+  }
+  .cta-block p {
+    font-size: 16px;
+    color: rgba(255,255,255,0.75);
+    line-height: 1.6;
+  }
+
+  /* ── FOOTER ── */
+  .page-footer {
+    position: absolute;
+    bottom: 22px;
+    left: 60px;
+    right: 60px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #aaa;
+  }
+  .cover .page-footer { color: rgba(255,255,255,0.25); }
+</style>
+</head>
+<body>
+
+<!-- ═══════ PAGE 1: COVER ═══════ -->
+<div class="page cover">
+  <h1>Заголовок<br><span>с акцентом</span></h1>
+  <p class="cover-subtitle">Подзаголовок с описанием ценности</p>
+  <div class="page-footer">
+    <span>© 2026</span>
+    <span>стр. 1/N</span>
+  </div>
+</div>
+
+<!-- ═══════ PAGE 2: CONTENT ═══════ -->
+<div class="page content-page">
+  <div class="section-intro">
+    <h2>Заголовок секции</h2>
+    <p>Короткое введение к материалу на этой странице.</p>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-num">1</div>
+      <div class="card-body">
+        <h3>Правило первое</h3>
+        <p>Описание правила или совета.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-num">2</div>
+      <div class="card-body">
+        <h3>Правило второе</h3>
+        <p>Описание правила или совета.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>Название документа</span>
+    <span>стр. 2/N</span>
+  </div>
+</div>
+
+<!-- ═══════ PAGE 3: CTA ═══════ -->
+<div class="page content-page">
+  <div class="section-intro">
+    <h2>Финальная секция</h2>
+    <p>Завершающий материал.</p>
+  </div>
+
+  <div class="cta-block">
+    <h3>Готовы к действию?</h3>
+    <p>Призыв подписаться, купить, внедрить.</p>
+  </div>
+
+  <div class="page-footer">
+    <span>© 2026</span>
+    <span>стр. N/N</span>
+  </div>
+</div>
+
+</body>
+</html>
