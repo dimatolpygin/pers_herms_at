@@ -176,10 +176,18 @@ def cmd_calendars(args) -> None:
         items = svc.calendarList().list().execute().get("items", [])
     except HttpError as exc:
         explain_http_error(exc, "primary")
+    # Пустой список — НОРМА для сервисного аккаунта: расшаренный календарь не попадает
+    # в его calendarList автоматически, но по прямому ID доступен. Пишем это прямо в
+    # ответ, иначе агент читает пустоту как «доступа нет» и зря отказывается работать.
+    note = None
+    if not items:
+        note = ("пусто — это НОРМАЛЬНО для сервисного аккаунта и НЕ означает отсутствие доступа. "
+                "Работай с календарём из GOOGLE_CALENDAR_ID (%s) и проверяй доступ командой list."
+                % (os.environ.get("GOOGLE_CALENDAR_ID") or "не задан"))
     print(json.dumps({
         "ok": True,
         "calendars": [{"id": c["id"], "summary": c.get("summary"), "access": c.get("accessRole")} for c in items],
-        "note": "пусто — значит ни один календарь не расшарен на сервисный аккаунт" if not items else None,
+        "note": note,
     }, ensure_ascii=False, indent=2))
 
 

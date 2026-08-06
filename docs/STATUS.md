@@ -69,12 +69,14 @@ supermemory (API расхода не отдаёт); (2) решение клие�
 `auto_capture: true` каждый ход диалога уезжает в облако вместе с личными данными Мики.
 **Пароли (`notes/mika-passwords.md`) в облако не заливались** — исключены намеренно.
 
-**Этап 18 — Google Calendar CRUD** ⏸ — **код готов и развёрнут**, ждёт включения Calendar API.
-Навык `productivity/google-calendar` (+ helper `gcal.py`: `calendars/list/create/update/delete`)
-на проде, ключ сервисного аккаунта в `/root/.hermes/google_service_account.json` (600).
-Живой прогон показал: агент навык зовёт, ошибку про выключенный API пересказывает честно.
-После нажатия «Enable» останется узнать ID календаря (`gcal.py calendars`) и прописать
-`GOOGLE_CALENDAR_ID` — у сервисного аккаунта своего `primary` нет.
+**Этап 18 — Google Calendar CRUD** 🚧 — **все 8 критериев закрыты машинной проверкой, блокер
+снят**. Клиент включил Calendar API и расшарил календарь `mikamironov@gmail.com`. Навык
+`productivity/google-calendar` (+ helper `gcal.py`: `calendars/list/create/update/delete`) на
+проде, ключ в `/root/.hermes/google_service_account.json` (600), `GOOGLE_CALENDAR_ID` и
+`GOOGLE_SERVICE_ACCOUNT_FILE` в `.env` и в `terminal.env_passthrough`.
+Полный цикл прогнан живыми репликами: посмотреть → поставить (с подтверждением) → перенести
+(тот же `id`, дубля нет) → удалить. Тестовое событие убрано, календарь чист.
+**Осталось**: живой UAT Микой в Telegram.
 
 **Бэкапы перед работой с памятью**: `.secrets/backups/hermes_CRITICAL_pre_supermemory.tar.gz`
 (8.1 МБ, 716 файлов: `memories/`, `notes/`, `SOUL.md`, `config.yaml`, `skills/`), целостность
@@ -95,7 +97,11 @@ supermemory (API расхода не отдаёт); (2) решение клие�
 
 ## Известные блокеры
 
-- **Google Calendar API выключен — этап 18 ⏸ (найдено 2026-08-06)**: сервисный аккаунт
+- **~~Google Calendar API выключен~~ — СНЯТО 2026-08-06**: клиент включил Calendar API и
+  расшарил календарь `mikamironov@gmail.com` на сервисный аккаунт. Полный цикл создание/правка/
+  удаление проверен живьём. Второй почтовый ящик `mikamironov1976@gmail.com` **не расшарен** —
+  если события ведутся и там, надо расшарить отдельно. Историческая запись ниже.
+- **(закрыто) Google Calendar API выключен — этап 18 (найдено 2026-08-06)**: сервисный аккаунт
   `wb-parser1@client-vk-post.iam.gserviceaccount.com` **аутентифицируется успешно** (JWT принят),
   но любой вызов Calendar API отдаёт `403: Google Calendar API has not been used in project
   107843866528 before or it is disabled`. То есть ключ рабочий, а сама API в Google-проекте
