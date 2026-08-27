@@ -46,7 +46,7 @@
 2. **Навык срезается у Геры только после того, как он поехал в профиле.** По одному.
    Иначе будет день, когда старое сломано, а новое не работает.
 3. **Руки Гере не отбираем.** У `delegate_task` дети **наследуют тулсеты родителя** — срежем
-   `terminal`/`code_execution` у Геры, срежем и у детей. Гера теряет специализированные
+   `terminal`/`execute_code` у Геры, срежем и у детей. Гера теряет специализированные
    НАВЫКИ (шпаргалки), а не инструменты. Принуждение к делегированию — точечный хук
    `pre_tool_call` (умеет `{"action":"block","message":...}`, см. `agent/shell_hooks.py`),
    а не тотальный запрет тулов.
@@ -141,6 +141,22 @@
 `FAL_ADMIN_KEY` и два почтовых пароля. Сузить с ходу нельзя — на этих же ключах живут навыки
 `balance` и `s3-upload`. Это конкретное содержание позиции «приватность на уровне профиля»,
 которая станет обязательной под Health.
+
+**Имена тулов Геры — брать из базы, а не из головы.** Фактический набор (по всей истории
+`state.db`): `terminal`, `execute_code`, `read_file`, `write_file`, `patch`, `web_search`,
+`web_extract`, `search_files`, `skill_view`, `skills_list`, `skill_manage`, `session_search`,
+`memory`, `browser_*`, `vision_analyze`, `delegate_task`, `todo`, `process`, `cronjob`,
+`image_generate`, `text_to_speech`, `supermemory_*`. Ловушка: тул зовётся **`execute_code`**,
+а секция конфига — **`code_execution`**; слова переставлены, и `matcher` хука по неверному
+имени просто молча не сработает. Дамп: `select tool_calls from messages`, поле
+`function.name`.
+
+**Форензика на проде: `sqlite3` не установлен, схема не та, что кажется.** Читать `state.db`
+только через `python3 -c "import sqlite3..."`. В `sessions` время — `started_at`
+(не `created_at` и не `timestamp`), там же `source`, `profile_name`, `tool_call_count`.
+Вызовы инструментов лежат не в `content`, а в отдельной колонке `messages.tool_calls`
+(JSON-список, имя и аргументы в `function`). Скрипты через heredoc с кириллицей ломаются —
+класть файлом в scratchpad, `pscp`, запускать по пути.
 
 **Хук `pre_tool_call` — рабочее принуждение, но у него три подводных камня (19.3).**
 Формат в `config.yaml`: `hooks.pre_tool_call[].command` (строка, парсится `shlex.split`,
