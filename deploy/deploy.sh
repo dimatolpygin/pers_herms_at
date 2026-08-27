@@ -46,6 +46,15 @@ mkdir -p "$SKILLS_DST"
 rsync -a "$SKILLS_SRC/" "$SKILLS_DST/"
 echo "навыки → $SKILLS_DST"
 
+echo "== sync хуков =="
+# Хук профильного сторожа (hooks/profile_guard.*) — тоже из репо. Без этого он
+# живёт только на проде и теряется при переезде или самообновлении hermes.
+# Сам блок hooks: в config.yaml правится один раз руками, конфиг не в git.
+mkdir -p "$HERMES_HOME/hooks"
+rsync -a "$INSTALL_DIR/hooks/" "$HERMES_HOME/hooks/"
+chmod 755 "$HERMES_HOME/hooks"/*.py 2>/dev/null || true
+echo "хуки → $HERMES_HOME/hooks"
+
 echo "== рестарт gateway =="
 systemctl restart hermes-gateway
 sleep 3

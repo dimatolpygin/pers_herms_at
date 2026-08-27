@@ -1,0 +1,89 @@
+{
+  "_": [
+    "Карта «что чья зона» для хука hooks/profile_guard.py.",
+    "Добавить профиль в конвейер = добавить сюда один блок и выкатить файл.",
+    "Код хука при этом не трогается.",
+    "",
+    "enabled=false — блок описан, но не применяется. Так профиль заводится и",
+    "проверяется до того, как Гере что-то запрещают: сначала он проходит",
+    "profile-acceptance, потом флаг переводится в true.",
+    "",
+    "skills  — навыки, чей вызов у Геры означает «полез делать сам».",
+    "          Инфраструктурные навыки профиля сюда НЕ входят: balance и",
+    "          s3-upload лежат у docs, но Гера пользуется ими законно.",
+    "markers — подстроки в команде терминала / коде / пути записи, по которым",
+    "          видно ту же работу в обход навыка (он умеет python-docx руками).",
+    "what    — как зона называется человеческими словами; уходит в текст отказа."
+  ],
+  "version": 1,
+  "log": "/root/.hermes/logs/profile_guard.jsonl",
+  "profiles": {
+    "docs": {
+      "enabled": true,
+      "what": "документы: КП, счета, оферты, акты, налоговые расчёты",
+      "skills": [
+        "business-documents",
+        "docx",
+        "docx-editing",
+        "proposal-formatting",
+        "rus-ip-tax-calc"
+      ],
+      "markers": [
+        "python-docx",
+        "from docx import",
+        "import docx",
+        "docxtpl",
+        ".docx"
+      ]
+    },
+    "dev": {
+      "enabled": false,
+      "what": "код и интеграции Tilda",
+      "skills": [
+        "tilda-api",
+        "tilda-page-editor",
+        "tilda-internal-api",
+        "tilda-webdav-agent",
+        "tilda-transport",
+        "tilda-integration"
+      ],
+      "markers": []
+    },
+    "seo": {
+      "enabled": false,
+      "what": "SEO: семантика, мета-теги, тексты под поиск",
+      "skills": [
+        "seo-optimization",
+        "seo-content-writing",
+        "semantic-core",
+        "geo-optimization",
+        "lova-seo-content",
+        "wordstat-api",
+        "yandex-wordstat"
+      ],
+      "markers": []
+    },
+    "content": {
+      "enabled": false,
+      "what": "контент для соцсетей и публикации",
+      "skills": [
+        "content-studio",
+        "postmypost-publish",
+        "lead-magnets",
+        "personal-brandbook"
+      ],
+      "markers": []
+    },
+    "writer": {
+      "enabled": false,
+      "what": "редактура и вычитка текстов",
+      "skills": [
+        "humanizer",
+        "professional-text-editing",
+        "text-editing",
+        "avoid-ai-writing"
+      ],
+      "markers": []
+    }
+  }
+}
