@@ -1,0 +1,28 @@
+model:
+  default: deepseek/deepseek-v4-pro
+  provider: openrouter
+agent:
+  max_turns: 30
+  reasoning_effort: low
+terminal:
+  backend: local
+  timeout: 120
+  env_passthrough: '["OPENROUTER_API_KEY", "GOOGLE_API_KEY"]'
+memory:
+  memory_enabled: true
+  user_profile_enabled: false
+  memory_char_limit: 15000
+  provider: supermemory
+delegation:
+  model: google/gemini-3.7-flash
+  provider: openrouter
+  max_iterations: 30
+compression:
+  enabled: true
+  threshold: 0.4
+  target_ratio: 0.15
+display:
+  language: ru
+  show_reasoning: false
+  streaming: true
+timezone: Europe/Moscow
