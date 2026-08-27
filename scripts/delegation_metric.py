@@ -151,8 +151,14 @@ WORK_TOOLS = {"write_file", "execute_code", "terminal", "patch", "process"}
 DELEGATE_CMD_RE = re.compile(
     r"hermes\s+(?:--profile|-p)\s+(\w+)"
     r"|profile[-_]delegate"
-    r"|kanban\s+assign\b",
+    r"|kanban\s+(?:assign|reassign)\b"
+    r"|kanban\s+create\b[^\n]*--assignee",
     re.IGNORECASE)
+
+# Штатный тул оркестратора (toolset `kanban`, появился у Геры на этапе 19.2).
+# Задача с assignee уходит диспетчеру, тот поднимает профиль своим HERMES_HOME —
+# со своей моделью, своими навыками и своим SOUL. Это делегирование профилю.
+KANBAN_CREATE_TOOL = "kanban_create"
 
 
 def parse_args():
@@ -251,7 +257,8 @@ def read_turns(conn, source, user_id):
                 if turn:
                     out.append(turn)
                 turn = {"session_id": sid, "msg_id": r["id"], "ts": r["timestamp"],
-                        "text": clean(r["content"]), "tools": [], "cmds": []}
+                        "text": clean(r["content"]), "tools": [], "cmds": [],
+                        "calls": []}
             elif turn is not None and r["tool_calls"]:
                 try:
                     calls = json.loads(r["tool_calls"])
@@ -270,6 +277,7 @@ def read_turns(conn, source, user_id):
                         args = json.dumps(args, ensure_ascii=False)
                     if args:
                         turn["cmds"].append(args)
+                    turn["calls"].append((name, args))
         if turn:
             out.append(turn)
         yield sid, out
@@ -284,6 +292,18 @@ def delegated_in(turn):
                  это тот же Гера в другом окне, а не специалист. Считать это
                  «отдал профилю» было бы подтасовкой в свою пользу.
     """
+    for name, args in turn.get("calls", []):
+        if name != KANBAN_CREATE_TOOL:
+            continue
+        try:
+            assignee = (json.loads(args) or {}).get("assignee") or ""
+        except (ValueError, TypeError):
+            assignee = ""
+        if not assignee:
+            # Без assignee задача не диспетчеризуется никогда — доска её просто
+            # хранит. Работа никуда не ушла, засчитывать нечего.
+            continue
+        return "profile", "kanban_create -> %s" % assignee[:40]
     for args in turn["cmds"]:
         m = DELEGATE_CMD_RE.search(args)
         if m:

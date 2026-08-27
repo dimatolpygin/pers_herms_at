@@ -2,7 +2,7 @@ model:
   default: deepseek/deepseek-v4-pro
   provider: openrouter
 agent:
-  max_turns: 30
+  max_turns: 80
   reasoning_effort: low
 terminal:
   backend: local
@@ -26,3 +26,6 @@ display:
   show_reasoning: false
   streaming: true
 timezone: Europe/Moscow
+onboarding:
+  seen:
+    tool_progress_prompt: true
