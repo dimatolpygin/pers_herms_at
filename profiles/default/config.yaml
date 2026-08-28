@@ -120,19 +120,30 @@ delegation:
   max_iterations: 50
 skills:
   creation_nudge_interval: 15
-  disabled: '["airtable", "architecture-diagram", "arxiv", "ascii-art", "ascii-video",
-    "audiocraft-audio-generation", "claude-code", "claude-design", "codebase-inspection",
-    "codex", "comfyui", "computer-use", "design-md", "dogfood", "evaluating-llms-harness",
-    "excalidraw", "gif-search", "github-auth", "github-code-review", "github-issues",
-    "github-pr-workflow", "github-repo-management", "google-workspace", "heartmula",
-    "himalaya", "huggingface-hub", "humanizer", "jupyter-live-kernel", "llama-cpp",
-    "llm-wiki", "manim-video", "maps", "nano-pdf", "node-inspect-debugger", "notion",
-    "obsidian", "ocr-and-documents", "opencode", "openhue", "p5js", "petdex", "polymarket",
-    "pretext", "python-debugpy", "requesting-code-review", "research-paper-writing",
-    "segment-anything-model", "serving-llms-vllm", "simplify-code", "sketch", "songsee",
-    "songwriting-and-ai-music", "spike", "systematic-debugging", "teams-meeting-pipeline",
-    "test-driven-development", "touchdesigner-mcp", "weights-and-biases", "xurl",
-    "youtube-content", "yuanbao", "execute_code"]'
+  # 19.4: ключ лежал ОДНОЙ СТРОКОЙ с JSON внутри. hermes читает такую строку как
+  # ОДНО имя навыка (skills_config._normalize_skill_names), поэтому НИ ОДНО отключение
+  # не действовало. Здесь настоящий YAML-список — проверять get_disabled_skills().
+  disabled:
+    - business-documents
+    - docx
+    - docx-editing
+    - proposal-formatting
+    - rus-ip-tax-calc
+  # Имена ниже клиент выключил раньше, но из-за формы они не действовали.
+  # Включать по его слову, отдельным шагом — не молча.
+  #   БЫЛО ОТКЛЮЧЕНО КЛИЕНТОМ: airtable, architecture-diagram, arxiv, ascii-art,
+  #     ascii-video, audiocraft-audio-generation, claude-code, claude-design,
+  #     codebase-inspection, codex, comfyui, computer-use, design-md, dogfood,
+  #     evaluating-llms-harness, excalidraw, gif-search, github-auth, github-code-review,
+  #     github-issues, github-pr-workflow, github-repo-management, google-workspace,
+  #     heartmula, himalaya, huggingface-hub, humanizer, jupyter-live-kernel, llama-cpp,
+  #     llm-wiki, manim-video, maps, nano-pdf, node-inspect-debugger, notion, obsidian,
+  #     ocr-and-documents, opencode, openhue, p5js, petdex, polymarket, pretext,
+  #     python-debugpy, requesting-code-review, research-paper-writing,
+  #     segment-anything-model, serving-llms-vllm, simplify-code, sketch, songsee,
+  #     songwriting-and-ai-music, spike, systematic-debugging, teams-meeting-pipeline,
+  #     test-driven-development, touchdesigner-mcp, weights-and-biases, xurl,
+  #     youtube-content, yuanbao, execute_code
 timezone: Europe/Moscow
 approvals:
   destructive_slash_confirm: false
@@ -198,3 +209,14 @@ platforms:
     extra:
       command_menu:
         max_commands: 100
+
+# --- Этап 19.3: принуждение к делегированию профилю ---------------------
+# Хук блокирует узкий сигнал «полез делать работу профиля сам», а не тулы:
+# у delegate_task дети наследуют тулсеты родителя, отбирать руки нельзя.
+# Карта зон — /root/.hermes/hooks/profile_guard.json (там же как добавить профиль).
+hooks_auto_accept: true
+hooks:
+  pre_tool_call:
+    - command: /usr/bin/python3 /root/.hermes/hooks/profile_guard.py
+      matcher: "skill_view|terminal|execute_code|write_file|patch"
+      timeout: 10
