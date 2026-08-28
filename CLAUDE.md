@@ -312,6 +312,16 @@ SOUL. Подменишь — тихо подорожают субагенты, �
 попалась первой в словаре, и задача уедет не в свой профиль. Ошибка молчаливая; проверка стоит
 в `profile_forge.py --check` и первым прогоном поймала `tilda-api` у `dev` и `seo`.
 
+**Рестарт gateway УБИВАЕТ работающего воркера kanban.** На доске это выглядит как
+`crashed / pid not alive`, два ретрая и `gave_up`; настоящая причина — в журнале systemd:
+`hermes-gateway.service: Killing process <pid> (hermes) with signal SIGKILL`. Воркеры живут
+в cgroup gateway (`kanban.dispatch_in_gateway`), у юнита `KillMode=mixed`, и после выхода
+главного процесса systemd добивает всё, что осталось в группе. Значит **любой** рестарт —
+деплой, правка конфига, самообновление hermes — уносит работу, идущую прямо сейчас, а клиент
+видит «профиль не работает». Перед любым рестартом/переустановкой смотреть
+`hermes kanban list --status running`; в `profile_forge.py install` и `deploy.sh` проверка
+встроена (обход `FORGE_IGNORE_RUNNING` / `DEPLOY_IGNORE_RUNNING`).
+
 **Сигнала «открыл чужой навык» хватает не всякой зоне.** Для `docs` хватало: Гера первым же
 вызовом шёл в `skill_view business-documents`. Для `dev` — нет: на «сделай расширение Chrome»
 он собрал его сам за 19 вызовов, ни разу не открыв навык. Изучал сайт через `browser_*` (эти
