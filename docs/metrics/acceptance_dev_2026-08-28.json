@@ -1,0 +1,126 @@
+{
+  "generated_at": "2026-08-28T12:37:56+0000",
+  "live": true,
+  "profiles": [
+    {
+      "profile": "dev",
+      "passed": true,
+      "checks": [
+        {
+          "check": "1. каталог профиля существует",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "/root/.hermes/profiles/dev"
+        },
+        {
+          "check": "2. поставлен из дистрибутива (обновляем из git)",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "/opt/pers_herms_at/profiles/dev"
+        },
+        {
+          "check": "3. SOUL: профиль знает, что он воркер, а не бот",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "вариант C соблюдён"
+        },
+        {
+          "check": "4. SOUL: путь для артефактов вне воркспейса",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "/root/.hermes/artifacts/dev"
+        },
+        {
+          "check": "5. agent.max_turns >= 80",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "сейчас 80"
+        },
+        {
+          "check": "6. модель как в реестре",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "qwen/qwen3.7-max (реестр: qwen/qwen3.7-max)"
+        },
+        {
+          "check": "7. terminal.env_passthrough — строка с ключом инференса",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "[\"OPENROUTER_API_KEY\"]"
+        },
+        {
+          "check": "8. .env доступен",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "симлинк -> /root/.hermes/.env"
+        },
+        {
+          "check": "9. маркер .no-bundled-skills (диета переживёт update)",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": ""
+        },
+        {
+          "check": "10. навыки профиля розданы и не битые",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "есть 8/8"
+        },
+        {
+          "check": "10a. в skills/ нет лишних каталогов",
+          "ok": true,
+          "level": "WARN",
+          "detail": "чисто"
+        },
+        {
+          "check": "11. промпт профиля <= 25000 Б",
+          "ok": true,
+          "level": "WARN",
+          "detail": "13836 Б"
+        },
+        {
+          "check": "12. describe записан и совпадает с реестром",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "Код и автоматизация: скрипты, приложения, расширения Chrome,"
+        },
+        {
+          "check": "13. каталог артефактов существует и пишется",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "/root/.hermes/artifacts/dev"
+        },
+        {
+          "check": "14. у Геры включён toolset kanban (транспорт)",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "[\"hermes-cli\", \"vision\", \"kanban\"]"
+        },
+        {
+          "check": "15. живой прогон: карточка заведена",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "t_ee1a47bc"
+        },
+        {
+          "check": "16. диспетчер подхватил карточку (профиль поднялся)",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "статус: done"
+        },
+        {
+          "check": "17. задача закрыта профилем",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "статус: done"
+        },
+        {
+          "check": "18. результат лежит в каталоге артефактов",
+          "ok": true,
+          "level": "BLOCK",
+          "detail": "price_bump.py"
+        }
+      ]
+    }
+  ]
+}
