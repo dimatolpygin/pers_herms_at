@@ -55,9 +55,27 @@ rsync -a "$INSTALL_DIR/hooks/" "$HERMES_HOME/hooks/"
 chmod 755 "$HERMES_HOME/hooks"/*.py 2>/dev/null || true
 echo "хуки → $HERMES_HOME/hooks"
 
+echo "== профили =="
+# Профили — дистрибутивы (см. docs/10_PROFILE_CONVEYOR.md). Перекатываем ТОЛЬКО
+# те, что уже стоят как дистрибутив: у них есть distribution.yaml, то есть их
+# ставили конвейером и источник правды у них — этот репозиторий. Профиль,
+# заведённый мимо конвейера, деплой не трогает — иначе один git push молча
+# переписал бы клиенту то, что он настраивал руками.
+# Новый профиль ставится явно: python3 scripts/profile_forge.py install <имя>
+for pdir in "$HERMES_HOME"/profiles/*/; do
+  pname="$(basename "$pdir")"
+  [ -f "$pdir/distribution.yaml" ] || continue
+  [ -d "$INSTALL_DIR/profiles/$pname" ] || continue
+  echo "-- $pname"
+  python3 "$INSTALL_DIR/scripts/profile_forge.py" install "$pname" 2>&1 | sed 's/^/   /'
+done
+
 echo "== рестарт gateway =="
-systemctl restart hermes-gateway
-sleep 3
+# reload, а не restart: у юнита ExecReload=kill -USR1, а SIGUSR1 у gateway —
+# штатный in-band рестарт (отказаться от новой работы, доработать текущие ходы,
+# выйти с кодом 75, systemd поднимет заново). restart рубит ходы на полуслове.
+systemctl reload hermes-gateway || systemctl restart hermes-gateway
+sleep 5
 if systemctl is-active --quiet hermes-gateway; then
   echo "gateway: active"
 else
