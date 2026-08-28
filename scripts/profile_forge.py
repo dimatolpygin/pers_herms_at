@@ -349,11 +349,17 @@ def install_profile(reg: dict, name: str, dry: bool = False) -> float:
     want = p.get("skills") or {}
     if not dry:
         skills_dir.mkdir(parents=True, exist_ok=True)
-        # Лишние симлинки убираем; настоящие каталоги не трогаем вовсе —
-        # в чужом каталоге может лежать не наше.
+        # Лишние симлинки убираем; настоящие каталоги с содержимым не трогаем
+        # вовсе — там может лежать не наше. А вот ПУСТЫЕ каталоги убираем:
+        # `skills opt-out --remove` уносит сами навыки, но их родительские
+        # папки (email/, creative/, mlops/inference/…) остаются и мозолят глаза
+        # в чеклисте, маскируя настоящий мусор.
         for entry in skills_dir.iterdir():
             if entry.is_symlink() and entry.name not in want:
                 entry.unlink()
+        for entry in sorted(skills_dir.rglob("*"), key=lambda x: -len(x.parts)):
+            if entry.is_dir() and not entry.is_symlink() and not any(entry.iterdir()):
+                entry.rmdir()
         for link, target in want.items():
             dst = skills_dir / link
             tgt = SHARED_SKILLS / target

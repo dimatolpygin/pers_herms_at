@@ -81,12 +81,13 @@ class Report:
         return not self.failed_blocking
 
 
-def sh(cmd, env=None, timeout=180):
+def sh(cmd, env=None, timeout=180, cwd=None):
     full = dict(os.environ)
     if env:
         full.update(env)
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, env=full, timeout=timeout)
+        r = subprocess.run(cmd, capture_output=True, text=True, env=full,
+                           timeout=timeout, cwd=cwd)
         return r.returncode, (r.stdout or ""), (r.stderr or "")
     except subprocess.TimeoutExpired:
         return 124, "", "timeout"
@@ -214,7 +215,12 @@ def run_checks(reg, name: str, live: bool) -> Report:
             ",".join(extra[:6]) if extra else "чисто")
 
     # 11. Промпт не раздут — иначе профиль «забывает» собственные правила.
-    rc, out, _ = sh(["hermes", "prompt-size", "--json"], env=env, timeout=120)
+    #     cwd=домашний каталог профиля обязателен: `prompt-size` подмешивает
+    #     AGENTS.md и файлы текущего каталога. Запуск из клона репозитория
+    #     давал 31 686 Б вместо настоящих 16 005 — то есть чеклист ругался бы
+    #     на профиль за содержимое каталога, из которого его проверяют.
+    rc, out, _ = sh(["hermes", "prompt-size", "--json"], env=env, timeout=120,
+                    cwd=str(home))
     size = None
     if rc == 0:
         try:
