@@ -70,6 +70,19 @@ for pdir in "$HERMES_HOME"/profiles/*/; do
   python3 "$INSTALL_DIR/scripts/profile_forge.py" install "$pname" 2>&1 | sed 's/^/   /'
 done
 
+# Карта зон сторожа генерируется форджем в клон репозитория, а rsync хуков
+# прошёл ВЫШЕ — без этой строки на прод уехала бы версия из коммита, а не
+# пересобранная. Пока они совпадают, но разойдутся в первый же раз, когда
+# реестр правят и забывают выполнить `profile_forge.py guard` перед пушем.
+cp "$INSTALL_DIR/hooks/profile_guard.json" "$HERMES_HOME/hooks/profile_guard.json"
+
+echo "== сторож =="
+# Файл хука пересинхронизирован, его mtime изменился — hermes честно скажет
+# «script modified since approval». Это предупреждение, а не отказ: хук
+# остаётся в allowlist и работает. Печатаем проверку, чтобы падение сторожа
+# было видно в логе деплоя, а не обнаруживалось по нулевому делегированию.
+hermes hooks doctor 2>&1 | sed 's/^/   /' || true
+
 echo "== рестарт gateway =="
 # reload, а не restart: у юнита ExecReload=kill -USR1, а SIGUSR1 у gateway —
 # штатный in-band рестарт (отказаться от новой работы, доработать текущие ходы,
