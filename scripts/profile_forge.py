@@ -74,6 +74,16 @@ HERMES_ROOT = Path(os.environ.get("HERMES_ROOT", "/root/.hermes"))
 SHARED_SKILLS = HERMES_ROOT / "skills"
 ROUTING_MD = SHARED_SKILLS / "meta" / "profile-delegate" / "ROUTING.md"
 
+# Оверлей реестра — профили, заведённые клиентом ПРЯМО НА СЕРВЕРЕ.
+# Зачем отдельно от profiles/registry.yaml: клон репозитория деплой обновляет
+# через `git reset --hard`, и блок, дописанный в реестр на сервере, исчезнет
+# при первом же деплое вместе с профилем. У клиента нет токена на push
+# (проверено: .git/config без учётных данных), поэтому «просто закоммить»
+# он не может. Каталог ниже лежит ВНЕ клона, деплой его не трогает.
+# Перенести профиль в git потом — отдельный осознанный шаг.
+REGISTRY_D = HERMES_ROOT / "registry.d"
+LOCAL_SRC = HERMES_ROOT / "profiles-src"
+
 DEFAULT_VERSION = "1.0.0"
 
 
@@ -84,7 +94,28 @@ def load_registry() -> dict:
         data = yaml.safe_load(fh)
     if not isinstance(data, dict) or "profiles" not in data:
         sys.exit(f"{REGISTRY}: нет ключа profiles")
+
+    # Профили из оверлея добавляются к репозиторным и могут их переопределять.
+    local = set()
+    if REGISTRY_D.is_dir():
+        for path in sorted(REGISTRY_D.glob("*.yaml")):
+            try:
+                extra = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            except Exception as exc:
+                sys.exit("%s: не читается — %s" % (path, exc))
+            for name, block in (extra.get("profiles") or {}).items():
+                data["profiles"][name] = block
+                local.add(name)
+    data["_local"] = local
     return data
+
+
+def src_dir(reg: dict, name: str) -> Path:
+    """Куда рендерить и откуда ставить. Репозиторный профиль едет в git,
+    локальный — в каталог вне клона, чтобы деплой его не снёс."""
+    if name in (reg.get("_local") or set()):
+        return LOCAL_SRC / name
+    return REPO / "profiles" / name
 
 
 def merged(reg: dict, name: str) -> dict:
@@ -137,7 +168,7 @@ def run(cmd: list, env: dict | None = None, check: bool = True) -> str:
 
 def render_profile(reg: dict, name: str) -> Path:
     p = merged(reg, name)
-    out_dir = REPO / "profiles" / name
+    out_dir = src_dir(reg, name)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # --- SOUL.md ---
@@ -308,7 +339,7 @@ def install_profile(reg: dict, name: str, dry: bool = False) -> float:
     """Ставит профиль на сервер. Возвращает время сборки в секундах —
     оно нужно как критерий приёмки этапа («время сборки записано»)."""
     p = merged(reg, name)
-    src = REPO / "profiles" / name
+    src = src_dir(reg, name)
     if not (src / "distribution.yaml").is_file():
         sys.exit("сначала отрендерь: python3 scripts/profile_forge.py render %s" % name)
 
