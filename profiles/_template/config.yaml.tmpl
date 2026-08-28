@@ -6,27 +6,27 @@
 # Чтобы перекатить и его — `hermes profile update <имя> --force-config`.
 
 model:
-  default: deepseek/deepseek-v4-pro
-  provider: openrouter
+  default: {{MODEL}}
+  provider: {{PROVIDER}}
 
 agent:
   # 80, а не 30. Проверено на проде: при 30 профиль СДЕЛАЛ документ и не успел
   # закрыть карточку — «Iteration budget exhausted (30/30)» -> timed_out ->
   # ретрай уже сделанной работы. Время ограничивается `max_runtime` задачи.
-  max_turns: 80
-  reasoning_effort: low
+  max_turns: {{MAX_TURNS}}
+  reasoning_effort: {{REASONING_EFFORT}}
 
 terminal:
   backend: local
   timeout: 120
   # Форма важна: hermes читает этот ключ как СТРОКУ с JSON внутри.
-  env_passthrough: '["OPENROUTER_API_KEY", "GOOGLE_API_KEY", "S3_ACCESS_KEY", "S3_SECRET_KEY", "S3_BUCKET", "S3_ENDPOINT"]'
+  env_passthrough: '{{ENV_PASSTHROUGH}}'
 
 memory:
-  memory_enabled: true
-  user_profile_enabled: false
-  memory_char_limit: 15000
-  provider: supermemory
+  memory_enabled: {{MEMORY_ENABLED}}
+  user_profile_enabled: {{USER_PROFILE_ENABLED}}
+  memory_char_limit: {{MEMORY_CHAR_LIMIT}}
+  provider: {{MEMORY_PROVIDER}}
 
 # Это НЕ критик. `delegation.*` — про дочерние вызовы `delegate_task` внутри
 # профиля (agent/iteration_budget.py, agent/delegation_context.py). Критик
@@ -34,18 +34,18 @@ memory:
 # Путать их нельзя: подменишь здесь — тихо подорожают субагенты, а критик
 # останется прежним.
 delegation:
-  model: google/gemini-3.7-flash
-  provider: openrouter
+  model: {{SUBAGENT_MODEL}}
+  provider: {{PROVIDER}}
   max_iterations: 30
 
 compression:
-  enabled: true
-  threshold: 0.4
-  target_ratio: 0.15
+  enabled: {{COMPRESSION_ENABLED}}
+  threshold: {{COMPRESSION_THRESHOLD}}
+  target_ratio: {{COMPRESSION_TARGET_RATIO}}
 
 display:
   language: ru
   show_reasoning: false
   streaming: true
 
-timezone: Europe/Moscow
+timezone: {{TIMEZONE}}

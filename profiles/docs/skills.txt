@@ -1,13 +1,13 @@
-# Навыки профиля docs — состояние после диеты 2026-08-27.
-# Все семь — симлинки в навыки Геры (/root/.hermes/skills/...), выбраны клиентом 20.08.
-# Поставочные навыки hermes (было 67) отключены штатным `hermes skills opt-out --remove`,
-# маркер .no-bundled-skills не даёт `hermes update` засеять их обратно.
-# Вернуть всё: HERMES_HOME=/root/.hermes/profiles/docs hermes skills opt-in --sync
+# Навыки профиля docs — СГЕНЕРИРОВАНО scripts/profile_forge.py.
+# Все они — симлинки в общие навыки Геры (\root\.hermes\skills).
+# Файлы не копируются: удалить навык у профиля можно, удалить сам навык —
+# нельзя, он сломается у Геры и во всех профилях сразу.
+# Раздача: python3 scripts/profile_forge.py install docs
 
-business-documents   -> productivity/business-documents   # свой навык клиента
-proposal-formatting  -> productivity/proposal-formatting   # свой навык клиента
-docx-editing         -> productivity/docx-editing          # свой навык клиента
-docx                 -> productivity/docx                  # из поставки hermes
-rus-ip-tax-calc      -> ops/rus-ip-tax-calc                # свой навык клиента
-s3-upload            -> media/s3-upload                    # свой навык клиента
-balance              -> ops/balance                        # свой навык клиента
+business-documents  -> productivity/business-documents
+proposal-formatting -> productivity/proposal-formatting
+docx-editing        -> productivity/docx-editing
+docx                -> productivity/docx
+rus-ip-tax-calc     -> ops/rus-ip-tax-calc
+s3-upload           -> media/s3-upload
+balance             -> ops/balance

@@ -1,0 +1,10 @@
+# Навыки профиля writer — СГЕНЕРИРОВАНО scripts/profile_forge.py.
+# Все они — симлинки в общие навыки Геры (\root\.hermes\skills).
+# Файлы не копируются: удалить навык у профиля можно, удалить сам навык —
+# нельзя, он сломается у Геры и во всех профилях сразу.
+# Раздача: python3 scripts/profile_forge.py install writer
+
+professional-text-editing -> writing/professional-text-editing
+avoid-ai-writing          -> writing/avoid-ai-writing
+text-editing              -> writing/text-editing
+humanizer                 -> creative/humanizer

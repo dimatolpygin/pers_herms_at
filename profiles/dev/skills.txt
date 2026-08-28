@@ -1,0 +1,14 @@
+# Навыки профиля dev — СГЕНЕРИРОВАНО scripts/profile_forge.py.
+# Все они — симлинки в общие навыки Геры (\root\.hermes\skills).
+# Файлы не копируются: удалить навык у профиля можно, удалить сам навык —
+# нельзя, он сломается у Геры и во всех профилях сразу.
+# Раздача: python3 scripts/profile_forge.py install dev
+
+systematic-debugging    -> software-development/systematic-debugging
+test-driven-development -> software-development/test-driven-development
+simplify-code           -> software-development/simplify-code
+plan                    -> software-development/plan
+python-debugpy          -> software-development/python-debugpy
+requesting-code-review  -> software-development/requesting-code-review
+codebase-inspection     -> github/codebase-inspection
+github-pr-workflow      -> github/github-pr-workflow

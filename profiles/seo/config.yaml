@@ -20,7 +20,7 @@ terminal:
   backend: local
   timeout: 120
   # Форма важна: hermes читает этот ключ как СТРОКУ с JSON внутри.
-  env_passthrough: '["OPENROUTER_API_KEY", "GOOGLE_API_KEY", "S3_ACCESS_KEY", "S3_SECRET_KEY", "S3_BUCKET", "S3_ENDPOINT"]'
+  env_passthrough: '["OPENROUTER_API_KEY", "TILDA_PUBLIC_KEY", "TILDA_SECRET_KEY", "WORDSTAT_TOKEN"]'
 
 memory:
   memory_enabled: true

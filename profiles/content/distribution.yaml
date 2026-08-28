@@ -1,0 +1,54 @@
+# СГЕНЕРИРОВАНО scripts/profile_forge.py. Руками не править.
+#
+# Манифест дистрибутива профиля — то, что читает `hermes profile install`.
+# Установка:  hermes profile install /opt/pers_herms_at/profiles/content --force -y
+# Обновление: hermes profile update content
+#
+# Почему в distribution_owned нет skills/:
+#   1. Дистрибутив НЕ МОЖЕТ содержать симлинки (`_reject_distribution_symlinks`
+#      кидает ошибку), а навыки профиля — именно симлинки в /root/.hermes/skills/,
+#      общие с Герой. Копировать их файлами значит расщепить один навык на семь
+#      расходящихся копий.
+#   2. Установка из дистрибутива не засевает поставочные навыки вовсе — профиль
+#      встаёт пустым, отдельная «диета» не нужна.
+# Навыки раздаёт scripts/profile_forge.py по списку из profiles/registry.yaml.
+
+name: content
+version: 1.0.0
+description: "Контент и соцсети — профиль агента LOVA CERAMICS"
+author: "ИП Миронов М.Ю. (LOVA CERAMICS)"
+hermes_requires: ">=0.20.0"
+
+distribution_owned:
+  - SOUL.md
+  - config.yaml
+  - distribution.yaml
+
+env_requires:
+  - name: OPENROUTER_API_KEY
+    description: "Ключ инференса OpenRouter (биллинг на аккаунт клиента)"
+    required: true
+  - name: KIE_AI_API_KEY
+    description: "kie.ai — генерация изображений"
+    required: false
+  - name: FAL_KEY
+    description: "FAL.ai — дорисовка фона на фото"
+    required: false
+  - name: POSTMYPOST_TOKEN
+    description: "PostMyPost — публикация в соцсети"
+    required: false
+  - name: POSTMYPOST_PROJECT_ID
+    description: "PostMyPost — id проекта LOVA"
+    required: false
+  - name: S3_ACCESS_KEY
+    description: "S3-хранилище — ключ доступа"
+    required: false
+  - name: S3_SECRET_KEY
+    description: "S3-хранилище — секрет"
+    required: false
+  - name: S3_BUCKET
+    description: "S3-хранилище — имя бакета"
+    required: false
+  - name: S3_ENDPOINT
+    description: "S3-хранилище — адрес эндпоинта"
+    required: false

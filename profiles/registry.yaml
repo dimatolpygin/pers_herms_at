@@ -1,0 +1,341 @@
+# Реестр профилей LOVA CERAMICS — единственный машинный источник правды.
+#
+# Инвариант 5 блока v8: маршрутизация берётся отсюда, а не из прозы в SOUL Геры.
+# Инвариант 1: профиль — продукт конвейера. Добавить восьмой профиль = дописать
+# один блок ниже и выполнить `scripts/profile_forge.py <имя>`. Ни SOUL Геры, ни
+# навык `meta/profile-delegate`, ни systemd руками не правятся.
+#
+# Отсюда кормятся четыре вещи, которые раньше расходились между собой:
+#   1. `distribution.yaml` профиля  — манифест для `hermes profile install`;
+#   2. `SOUL.md` профиля            — рендерится из `profiles/_template/SOUL.md.tmpl`;
+#   3. `config.yaml` профиля        — модель, критик, предохранители;
+#   4. `hermes profile describe`    — то, чем диспетчер kanban выбирает исполнителя.
+#
+# Почему это важно: до конвейера таблица моделей существовала в ТРЁХ местах
+# (ТЗ клиента v8, навык `meta/profile-architecture`, реальные config.yaml) и
+# в двух из трёх врала — `seo` и `dev` значились на Gemini Flash, фактически
+# стояли DeepSeek и Qwen. Сгенерированное разойтись не может.
+#
+# Проверка после правки:  python3 scripts/profile_forge.py --check
+
+version: 1
+
+# ─────────────────────────── общие умолчания ───────────────────────────
+# Всё, что не переопределено в блоке профиля, берётся отсюда.
+defaults:
+  provider: openrouter
+  timezone: Europe/Moscow
+
+  # Предохранитель воркера. 30 — это ловушка, проверенная на проде: профиль
+  # СДЕЛАЛ документ и не успел закрыть карточку («Iteration budget exhausted
+  # 30/30» -> timed_out -> ретрай уже сделанной работы). Ограничивать надо
+  # временем (`max_runtime` задачи), а не числом ходов.
+  max_turns: 80
+  reasoning_effort: low
+
+  # Модель дочерних вызовов `delegate_task` внутри профиля. Это НЕ критик:
+  # `delegation.*` в config.yaml управляет субагентами, а критик профиль
+  # зовёт сам по инструкции в SOUL.md. Так стоит на проде у всех шести.
+  subagent_model: google/gemini-3.7-flash
+
+  # Провайдерские ключи вычищаются из дочернего окружения (`_scrub_child_env`),
+  # поэтому нужные пробрасываются явно.
+  env_passthrough:
+    - OPENROUTER_API_KEY
+
+  memory:
+    memory_enabled: true
+    user_profile_enabled: false
+    memory_char_limit: 15000
+    provider: supermemory
+
+  compression:
+    enabled: true
+    threshold: 0.4
+    target_ratio: 0.15
+
+  # Автор дистрибутива — для манифеста `distribution.yaml`.
+  author: "ИП Миронов М.Ю. (LOVA CERAMICS)"
+  hermes_requires: ">=0.20.0"
+
+  # Расшифровки переменных окружения. `env_requires` в манифесте профиля
+  # собирается форджем автоматически из его `env_passthrough` по этому словарю —
+  # чтобы `.env.EXAMPLE`, который hermes генерирует при установке, не разошёлся
+  # с тем, что профилю реально пробрасывается.
+  env_descriptions:
+    OPENROUTER_API_KEY: "Ключ инференса OpenRouter (биллинг на аккаунт клиента)"
+    GOOGLE_API_KEY: "Google API — шрифты и вспомогательные вызовы в документах"
+    KIE_AI_API_KEY: "kie.ai — генерация изображений"
+    FAL_KEY: "FAL.ai — дорисовка фона на фото"
+    POSTMYPOST_TOKEN: "PostMyPost — публикация в соцсети"
+    POSTMYPOST_PROJECT_ID: "PostMyPost — id проекта LOVA"
+    S3_ACCESS_KEY: "S3-хранилище — ключ доступа"
+    S3_SECRET_KEY: "S3-хранилище — секрет"
+    S3_BUCKET: "S3-хранилище — имя бакета"
+    S3_ENDPOINT: "S3-хранилище — адрес эндпоинта"
+    TILDA_PUBLIC_KEY: "Tilda API — публичный ключ (только чтение)"
+    TILDA_SECRET_KEY: "Tilda API — секретный ключ"
+    WORDSTAT_TOKEN: "Яндекс.Вордстат — токен для снятия частотностей"
+
+  # Обязательные переменные, помимо выведенных из env_passthrough.
+  env_required:
+    - OPENROUTER_API_KEY
+
+# ─────────────────────────── профили ───────────────────────────
+#
+# Поля блока:
+#   title        — человеческое имя (шапка SOUL.md);
+#   model        — основная модель (config.yaml -> model.default);
+#   critic       — модель критика ИЗ ДРУГОЙ СЕМЬИ (раздел 6 ТЗ v8);
+#   critic_why   — почему именно она; попадает в SOUL, чтобы следующий не «сэкономил»;
+#   describe     — одна-две фразы для `hermes profile describe`. ОБЯЗАТЕЛЬНО
+#                  содержит «не сюда»: с восемью профилями зоны ответственности
+#                  пересекаются, и «не сюда» — единственное, что удерживает
+#                  задачу от ухода не туда;
+#   duties       — список работ (раздел 4 ТЗ v8), идёт в SOUL;
+#   rules        — профильные правила поверх общих (необязательно);
+#   artifacts    — КУДА класть результат. Абсолютный путь ВНЕ воркспейса задачи:
+#                  воркспейс kanban по умолчанию `scratch` и удаляется после
+#                  завершения — файл, записанный внутрь, пропадает вместе с ним;
+#   skills       — навыки профиля. Ключ — имя симлинка в skills/ профиля,
+#                  значение — путь в /root/.hermes/skills/. Файлы НЕ копируются:
+#                  это симлинки, общие с Герой. Удалить навык у профиля можно,
+#                  удалить сам навык — нельзя, сломается у всех сразу.
+
+profiles:
+
+  docs:
+    title: "Документы"
+    model: deepseek/deepseek-v4-pro
+    critic: qwen/qwen3.7-max
+    critic_why: >-
+      Qwen Max пересчитывает цифры и проверяет арифметику. Ошибка в сумме — это
+      реальные деньги клиента, экономия на критике здесь опаснее его цены.
+    describe: >-
+      Документы ИП Миронов М.Ю. (LOVA CERAMICS): коммерческие предложения,
+      счета-оферты, закрывающие документы и акты, расчёт налогов УСН 6% без НДС.
+      Собирает .docx и .xlsx по эталонным образцам — с реквизитами, логотипом и
+      проверкой арифметики критиком. Сюда идёт всё, где результат — файл документа
+      с цифрами и реквизитами. Не сюда: посты в соцсети, тексты для сайта, код.
+    duties:
+      - "Коммерческие предложения (КП) в .docx с таблицами и фото"
+      - "Счета-оферты по образцу LOVA"
+      - "Закрывающие документы и акты выполненных работ"
+      - "Расчёт налогов (УСН 6%, ИП без НДС)"
+      - "Форматирование по образцу: шрифты, логотип, таблицы"
+    rules:
+      - "Документ НЕ генерируется python-docx с нуля — копируется эталонный
+         шаблон и заменяются данные."
+      - "Реквизиты не выдумываются. Нет ИНН/ОГРН/КПП — ставится явная заглушка
+         и перечисляется в ответе, чем именно её заменить."
+    artifacts: /root/.hermes/artifacts/business-documents
+    acceptance_probe:
+      title: "Приёмка docs: прайс-лист LOVA"
+      body: >-
+        Приёмочная проверка конвейера, не боевая задача. Собери .docx с общим
+        прайс-листом LOVA CERAMICS на 2026 год: ваза V021 — 7 800 ₽, кружка
+        M014 — 2 400 ₽, тарелка P007 — 3 100 ₽. Это общий прайс, реквизиты
+        покупателя не нужны. Готовый файл положи в
+        /root/.hermes/artifacts/business-documents и верни абсолютный путь.
+      max_runtime: 25m
+    env_passthrough:
+      - OPENROUTER_API_KEY
+      - GOOGLE_API_KEY
+      - S3_ACCESS_KEY
+      - S3_SECRET_KEY
+      - S3_BUCKET
+      - S3_ENDPOINT
+    skills:
+      business-documents: productivity/business-documents
+      proposal-formatting: productivity/proposal-formatting
+      docx-editing: productivity/docx-editing
+      docx: productivity/docx
+      rus-ip-tax-calc: ops/rus-ip-tax-calc
+      s3-upload: media/s3-upload
+      balance: ops/balance
+
+  dev:
+    title: "Код и автоматизация"
+    model: qwen/qwen3.7-max
+    critic: google/gemini-3.7-flash
+    critic_why: >-
+      Cross-check Qwen -> Google: критик обязан быть из другой семьи, иначе он
+      повторит ошибку автора. Flash здесь дёшев и достаточен — он проверяет код,
+      а не пересчитывает деньги.
+    describe: >-
+      Код и автоматизация: скрипты, приложения, расширения Chrome, Playwright,
+      веб-код HTML/CSS/JS, backend на Python, интеграции по API, серверные задачи,
+      отладка и разбор чужого кода. Сюда идёт всё, где результат — работающий код
+      или запускаемый скрипт. Не сюда: тексты, посты и документы; массовая правка
+      мета-тегов на Tilda — это seo.
+    duties:
+      - "Vibe-кодинг: приложения, скрипты, расширения браузера"
+      - "Tilda-автоматизация (Chrome Extension, Playwright)"
+      - "Веб-кодинг (HTML/CSS/JS)"
+      - "Backend-скрипты на Python, интеграции по API"
+      - "Отладка: воспроизвести, локализовать, починить, доказать тестом"
+    rules:
+      - "Сложное архитектурное — переключение на Sonnet 5; простые скрипты и
+         правки остаются на Qwen Max. Переключение называется в ответе явно."
+      - "Код без запуска не сдаётся. Если запустить нельзя — это пишется прямо,
+         а не заменяется словами «должно работать»."
+    artifacts: /root/.hermes/artifacts/dev
+    # Приёмочная задача: маленькая, проверяемая глазами, без внешних сервисов.
+    # Реквизиты и контрагентов в такие задачи не пишем — Гера прогоняет ИНН/ОГРН
+    # через контрольную сумму и отказывается работать с выдуманными (сорвало
+    # первый замер 19.4).
+    acceptance_probe:
+      title: "Приёмка dev: скрипт пересчёта прайса"
+      body: >-
+        Приёмочная проверка конвейера, не боевая задача. Напиши на Python скрипт
+        price_bump.py: читает CSV с колонками name,price, поднимает цену на
+        заданный процент, округляет до 50 ₽ вверх, пишет новый CSV. Приложи
+        самопроверку на трёх строках и запусти её — в ответе покажи вывод.
+        Готовый файл положи в /root/.hermes/artifacts/dev и верни абсолютный путь.
+      max_runtime: 20m
+    env_passthrough:
+      - OPENROUTER_API_KEY
+    skills:
+      systematic-debugging: software-development/systematic-debugging
+      test-driven-development: software-development/test-driven-development
+      simplify-code: software-development/simplify-code
+      plan: software-development/plan
+      python-debugpy: software-development/python-debugpy
+      requesting-code-review: software-development/requesting-code-review
+      codebase-inspection: github/codebase-inspection
+      github-pr-workflow: github/github-pr-workflow
+
+  content:
+    title: "Контент и соцсети"
+    model: deepseek/deepseek-v4-pro
+    critic: deepseek/deepseek-v4-pro
+    critic_why: >-
+      Отдельный вызов той же модели — «свежий взгляд» без контекста черновика.
+      Так в ТЗ v8; Gemini Flash сюда не ставится намеренно: на постах он даёт
+      мёртвый текст (замечено клиентом и записано в meta/profile-architecture).
+    describe: >-
+      Соцсети LOVA CERAMICS: посты для Instagram, Telegram, VK, Pinterest,
+      генерация и доработка картинок (kie.ai, FAL.ai), автопостинг через
+      PostMyPost, описания товаров и категорий, загрузка фото в S3.
+      Не сюда: мета-теги и прочая SEO-механика — это seo; литературная
+      редактура и книга — это writer.
+    duties:
+      - "Автопостинг в Instagram, Telegram, VK, Pinterest"
+      - "Генерация картинок (kie.ai) и дорисовка фона (FAL.ai)"
+      - "Обработка ссылок на товары: сбор фото и цен с Tilda"
+      - "Наложение логотипа и адреса сайта на фото"
+      - "Загрузка пользовательских фото в S3"
+    artifacts: /root/.hermes/artifacts/content
+    env_passthrough:
+      - OPENROUTER_API_KEY
+      - KIE_AI_API_KEY
+      - FAL_KEY
+      - POSTMYPOST_TOKEN
+      - POSTMYPOST_PROJECT_ID
+      - S3_ACCESS_KEY
+      - S3_SECRET_KEY
+      - S3_BUCKET
+      - S3_ENDPOINT
+    skills:
+      content-studio: marketing/content-studio
+      postmypost: social-publishing/postmypost
+      s3-upload: media/s3-upload
+      image-vision: media/image-vision
+      ai-image-prompts: ai-image-prompts
+      tilda-store-assets: ops/tilda-store-assets
+      personal-brandbook: marketing/personal-brandbook
+
+  seo:
+    title: "SEO-механика"
+    model: deepseek/deepseek-v4-pro
+    critic: google/gemini-3.7-flash
+    critic_why: >-
+      Cross-check DeepSeek -> Google. Работа механическая и массовая, критику
+      достаточно поймать сбитый шаблон и превышение длины title/description.
+    describe: >-
+      SEO-механика на Tilda, только исполнение: массовая замена title,
+      description и H1, прописывание alt у картинок, снятие частотностей по
+      готовому списку ключей, проверка индексации, robots.txt и sitemap.
+      Не сюда: семантическое ядро, кластеризация и приоритеты — это strategist;
+      написание самих текстов — это content или writer.
+    duties:
+      - "Массовые правки meta-тегов через Tilda API"
+      - "Замена title / description / H1 на всех страницах"
+      - "Прописывание alt у картинок"
+      - "Сбор частотностей через Wordstat API"
+      - "Проверка индексации, robots.txt, sitemap"
+    rules:
+      - "У Tilda нет API на запись, а с серверного IP сессия отбивается (302 на
+         /login/, проверено клиентом 12.08.2026). Всё, что требует браузера,
+         уходит на машину клиента в seo_agent/ — здесь готовится только план
+         правок, а не выполняется вход."
+    artifacts: /root/.hermes/artifacts/seo
+    env_passthrough:
+      - OPENROUTER_API_KEY
+      - TILDA_PUBLIC_KEY
+      - TILDA_SECRET_KEY
+      - WORDSTAT_TOKEN
+    skills:
+      seo-tilda: seo/seo-tilda
+      wordstat-api: seo/wordstat-api
+      yandex-wordstat: seo/yandex-wordstat
+      tilda-api: ops/tilda-api
+      google-search-console: seo/google-search-console
+      seo-optimization: research/seo-optimization
+
+  strategist:
+    title: "Стратегия"
+    model: deepseek/deepseek-v4-pro
+    critic: qwen/qwen3.7-max
+    critic_why: >-
+      Cross-check DeepSeek -> Qwen. Стратегию проверяют на противоречия и
+      необоснованные утверждения, а не на орфографию — критик нужен сильный.
+    describe: >-
+      Стратегия LOVA CERAMICS: семантическое ядро и кластеризация, маркетинговые
+      и SEO-стратегии, позиционирование бренда, JTBD-анализ, приоритеты, разбор
+      рынка и конкурентов. Сюда идут решения о том, ЧТО делать.
+      Не сюда: исполнение принятого решения — правка мета-тегов уходит в seo,
+      написание постов в content, документы в docs.
+    duties:
+      - "SEO-стратегии: семантическое ядро, кластеризация"
+      - "Маркетинговые стратегии: каналы, воронки"
+      - "JTBD-анализ: зачем клиент покупает"
+      - "Бренд: позиционирование, tone of voice"
+      - "Конкурентный анализ: сбор данных, сравнение"
+      - "Стратегические документы для других профилей"
+    artifacts: /root/.hermes/artifacts/strategist
+    env_passthrough:
+      - OPENROUTER_API_KEY
+    skills:
+      semantic-core: seo/semantic-core
+      jobs-to-be-done: marketing/jobs-to-be-done
+      personal-brandbook: marketing/personal-brandbook
+      geo-optimization: seo/geo-optimization
+      grounded-citations: research/grounded-citations
+
+  writer:
+    title: "Литература и редактура"
+    model: anthropic/claude-sonnet-5
+    critic: qwen/qwen3.7-max
+    critic_why: >-
+      Cross-check Anthropic -> Qwen. Автор и критик из одной семьи не поймают
+      общий стилистический тик — здесь это главный риск.
+    describe: >-
+      Литературная работа: книга «Семьи» и другие авторские тексты, корректура,
+      вычитка, профессиональная редактура, стилистическая правка, снятие
+      AI-штампов и канцелярита, сохранение авторского голоса Мики.
+      Не сюда: продающие посты — это content; документы с реквизитами — это docs.
+    duties:
+      - "Литературная обработка книг"
+      - "Корректура и вычитка"
+      - "Профессиональная редактура статей"
+      - "Сохранение авторского голоса Мики"
+      - "Снятие AI-штампов и канцелярита"
+    artifacts: /root/.hermes/artifacts/writer
+    env_passthrough:
+      - OPENROUTER_API_KEY
+    skills:
+      professional-text-editing: writing/professional-text-editing
+      avoid-ai-writing: writing/avoid-ai-writing
+      text-editing: writing/text-editing
+      humanizer: creative/humanizer

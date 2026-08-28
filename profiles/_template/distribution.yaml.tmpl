@@ -1,0 +1,28 @@
+# СГЕНЕРИРОВАНО scripts/profile_forge.py. Руками не править.
+#
+# Манифест дистрибутива профиля — то, что читает `hermes profile install`.
+# Установка:  hermes profile install /opt/pers_herms_at/profiles/{{NAME}} --force -y
+# Обновление: hermes profile update {{NAME}}
+#
+# Почему в distribution_owned нет skills/:
+#   1. Дистрибутив НЕ МОЖЕТ содержать симлинки (`_reject_distribution_symlinks`
+#      кидает ошибку), а навыки профиля — именно симлинки в /root/.hermes/skills/,
+#      общие с Герой. Копировать их файлами значит расщепить один навык на семь
+#      расходящихся копий.
+#   2. Установка из дистрибутива не засевает поставочные навыки вовсе — профиль
+#      встаёт пустым, отдельная «диета» не нужна.
+# Навыки раздаёт scripts/profile_forge.py по списку из profiles/registry.yaml.
+
+name: {{NAME}}
+version: {{VERSION}}
+description: "{{TITLE}} — профиль агента LOVA CERAMICS"
+author: "{{AUTHOR}}"
+hermes_requires: "{{HERMES_REQUIRES}}"
+
+distribution_owned:
+  - SOUL.md
+  - config.yaml
+  - distribution.yaml
+
+env_requires:
+{{ENV_REQUIRES}}
