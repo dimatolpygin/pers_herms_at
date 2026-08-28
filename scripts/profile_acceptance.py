@@ -93,15 +93,13 @@ def sh(cmd, env=None, timeout=180, cwd=None):
         return 124, "", "timeout"
 
 
-def load_registry():
-    with REGISTRY.open(encoding="utf-8") as fh:
-        return yaml.safe_load(fh)
-
-
-def merged(reg, name):
-    out = dict(reg.get("defaults") or {})
-    out.update(reg["profiles"][name] or {})
-    return out
+# Реестр читаем ТЕМ ЖЕ загрузчиком, что и фордж. Свой был у чеклиста ровно до
+# первого профиля, заведённого клиентом на сервере: тот лежит в оверлее
+# /root/.hermes/registry.d/, фордж его видел, чеклист — нет, и приёмка падала
+# с KeyError на имени профиля. Две функции чтения одного и того же расходятся
+# всегда, вопрос только когда.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from profile_forge import load_registry, merged  # noqa: E402
 
 
 def flow(text):
