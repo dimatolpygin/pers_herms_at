@@ -325,15 +325,24 @@ def install_profile(reg: dict, name: str, dry: bool = False) -> float:
         env_link.symlink_to(HERMES_ROOT / ".env")
         say(".env -> %s/.env" % HERMES_ROOT)
 
-    # 3. Маркер: не засевать поставочные навыки при `hermes update`.
-    #    Без него самообновление hermes (прод уже уезжал 0.18 -> 0.20 сам)
-    #    вернёт профилю все 67 навыков и съест диету.
+    # 3. Диета — штатной командой, а не руками. `opt-out --remove` удаляет
+    #    ТОЛЬКО неизменённые поставочные навыки (правленные и пользовательские
+    #    не трогает) и ставит маркер .no-bundled-skills, чтобы `hermes update`
+    #    не засеял их обратно. Ручное удаление каталогов прожило бы до
+    #    следующего самообновления hermes — прод уже уезжал 0.18 -> 0.20 сам.
+    #    Откат: `hermes skills opt-in --sync`.
+    #    Профилю, поставленному из дистрибутива, удалять обычно нечего — он
+    #    встаёт пустым; команда нужна для профилей, заведённых раньше через
+    #    `hermes profile create` (у dev так лежало 22 каталога).
     marker = home / ".no-bundled-skills"
     if dry:
-        say("[dry] маркер .no-bundled-skills")
+        say("[dry] hermes skills opt-out --remove --yes (HERMES_HOME профиля)")
     else:
-        marker.touch()
-        say("маркер .no-bundled-skills поставлен")
+        out = run(["hermes", "skills", "opt-out", "--remove", "--yes"], env=env, check=False)
+        if not marker.exists():
+            marker.touch()
+        say("диета: маркер .no-bundled-skills, %s" % out.strip().splitlines()[-1][:60]
+            if out.strip() else "диета: маркер .no-bundled-skills")
 
     # 4. Навыки — симлинками в общий каталог.
     skills_dir = home / "skills"
