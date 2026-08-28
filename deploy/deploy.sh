@@ -56,6 +56,17 @@ chmod 755 "$HERMES_HOME/hooks"/*.py 2>/dev/null || true
 echo "хуки → $HERMES_HOME/hooks"
 
 echo "== профили =="
+# Рестарт gateway в конце деплоя УБЬЁТ работающего воркера kanban (SIGKILL по
+# cgroup, замерено 28.08.2026: задача дважды «crashed / pid not alive» и была
+# брошена). Поэтому деплой при занятой доске останавливается — работа клиента
+# дороже свежести кода на пару минут.
+if hermes kanban list --status running 2>/dev/null | grep -qE '^\s*[●▶]'; then
+  echo "На доске есть работающие задачи — деплой отложен, чтобы не убить воркеров:"
+  hermes kanban list --status running 2>/dev/null | sed 's/^/   /'
+  echo "Повторить после их завершения (или DEPLOY_IGNORE_RUNNING=1, если уверен)."
+  [ "${DEPLOY_IGNORE_RUNNING:-0}" = "1" ] || exit 1
+fi
+
 # Профили — дистрибутивы (см. docs/10_PROFILE_CONVEYOR.md). Перекатываем ТОЛЬКО
 # те, что уже стоят как дистрибутив: у них есть distribution.yaml, то есть их
 # ставили конвейером и источник правды у них — этот репозиторий. Профиль,

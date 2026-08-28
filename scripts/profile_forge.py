@@ -315,6 +315,28 @@ def install_profile(reg: dict, name: str, dry: bool = False) -> float:
     home = HERMES_ROOT / "profiles" / name
     env = {"HERMES_HOME": str(home)}
     steps = []
+
+    # Замерено 28.08.2026: рестарт gateway УБИВАЕТ работающего воркера kanban.
+    # В журнале это выглядит как
+    #   hermes-gateway.service: Killing process <pid> (hermes) with signal SIGKILL
+    # а на доске — как «crashed / pid not alive», два ретрая и gave_up. Воркеры
+    # живут в cgroup gateway (kanban.dispatch_in_gateway), и KillMode=mixed
+    # добивает всё, что осталось в группе после выхода главного процесса.
+    # Поэтому перед переустановкой профиля смотрим на доску: работа клиента
+    # дороже нашей аккуратности.
+    if not dry:
+        out = run(["hermes", "kanban", "list", "--status", "running"], check=False)
+        busy = [ln for ln in out.splitlines() if ln.strip().startswith(("●", "▶"))]
+        if busy and not os.environ.get("FORGE_IGNORE_RUNNING"):
+            print("НА ДОСКЕ ЕСТЬ РАБОТАЮЩИЕ ЗАДАЧИ — ставить профиль сейчас нельзя:")
+            for ln in busy:
+                print("   " + ln.strip()[:100])
+            sys.exit(
+                "Рестарт gateway убьёт этих воркеров (SIGKILL), задачи уйдут в ретрай "
+                "и после двух падений будут брошены. Дождись завершения или, если "
+                "точно знаешь, что делаешь, повтори с FORGE_IGNORE_RUNNING=1."
+            )
+
     t0 = time.time()
 
     def say(msg):
