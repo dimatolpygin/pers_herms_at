@@ -273,6 +273,23 @@ def check(reg: dict) -> int:
     if not TEMPLATE_DIR.is_dir():
         problems.append("нет каталога шаблона %s" % TEMPLATE_DIR)
 
+    # Один навык в двух ВКЛЮЧЁННЫХ зонах сторожа — молчаливая ошибка
+    # маршрутизации: блокировка сработает от той зоны, что попалась первой,
+    # и задача уедет не в свой профиль.
+    owner = {}
+    for name in sorted(reg["profiles"]):
+        p = merged(reg, name)
+        g = p.get("guard") or {}
+        if not g.get("enabled"):
+            continue
+        skip = set(g.get("guard_skip") or [])
+        for sk in [k for k in (p.get("skills") or {}) if k not in skip] + list(g.get("guard_extra") or []):
+            if sk in owner:
+                problems.append(
+                    "навык '%s' сторожит сразу за %s и за %s — задача уедет "
+                    "в тот профиль, что попался первым" % (sk, owner[sk], name))
+            owner[sk] = name
+
     for name, desc in seen_desc.items():
         print("  %-12s %s" % (name, desc[:78]))
     print()
@@ -451,6 +468,67 @@ def build_routing(reg: dict, dry: bool = False) -> None:
     print("ROUTING.md собран: %s (%d Б)" % (ROUTING_MD, len(text.encode("utf-8"))))
 
 
+# ─────────────────────────── сторож ───────────────────────────
+
+GUARD_JSON = REPO / "hooks" / "profile_guard.json"
+
+GUARD_HEADER = [
+    "СГЕНЕРИРОВАНО scripts/profile_forge.py из profiles/registry.yaml.",
+    "Руками не править — менять реестр (блок guard: у профиля) и пересобирать:",
+    "    python3 scripts/profile_forge.py guard",
+    "",
+    "Карта «что чья зона» для хука hooks/profile_guard.py. Код хука при",
+    "добавлении профиля не трогается.",
+    "",
+    "enabled=false — блок описан, но не применяется. Так профиль заводится и",
+    "проверяется до того, как Гере что-то запрещают: сначала он проходит",
+    "profile-acceptance, потом флаг переводится в true.",
+    "",
+    "skills  — навыки, чей вызов у Геры означает «полез делать сам». Берутся",
+    "          из skills профиля минус guard_skip плюс guard_extra.",
+    "          guard_skip нужен для инфраструктурных навыков: balance и",
+    "          s3-upload лежат у docs, но Гера пользуется ими законно.",
+    "markers — подстроки в команде терминала / коде / пути записи, по которым",
+    "          видно ту же работу в обход навыка.",
+    "what    — как зона называется человеческими словами; уходит в текст отказа.",
+]
+
+
+def build_guard(reg: dict, dry: bool = False) -> None:
+    """Пересобирает карту зон сторожа из реестра.
+
+    Инвариант 5 доведён до конца: и маршрутизация (describe/ROUTING.md), и
+    принуждение (сторож) едут из одного файла. Раньше списки навыков в сторожа
+    вписывались руками и разошлись бы с реестром на первом же новом профиле.
+    """
+    out = {
+        "_": GUARD_HEADER,
+        "version": 1,
+        "log": "/root/.hermes/logs/profile_guard.jsonl",
+        "profiles": {},
+    }
+    for name in sorted(reg["profiles"]):
+        p = merged(reg, name)
+        g = p.get("guard") or {}
+        skip = set(g.get("guard_skip") or [])
+        skills = [k for k in (p.get("skills") or {}) if k not in skip]
+        skills += [x for x in (g.get("guard_extra") or []) if x not in skills]
+        out["profiles"][name] = {
+            "enabled": bool(g.get("enabled")),
+            "what": flow(g.get("what") or p.get("title") or name),
+            "skills": skills,
+            "markers": list(g.get("markers") or []),
+        }
+    text = json.dumps(out, ensure_ascii=False, indent=2) + chr(10)
+    if dry:
+        print(text)
+        return
+    GUARD_JSON.parent.mkdir(parents=True, exist_ok=True)
+    GUARD_JSON.write_text(text, encoding="utf-8", newline=chr(10))
+    on = [n for n, v in out["profiles"].items() if v["enabled"]]
+    print("profile_guard.json собран: %s (включены: %s)" % (GUARD_JSON, ", ".join(on) or "нет"))
+
+
 # ─────────────────────────── CLI ───────────────────────────
 
 def main() -> int:
@@ -468,6 +546,7 @@ def main() -> int:
     i.add_argument("--dry-run", action="store_true")
 
     sub.add_parser("routing", help="пересобрать ROUTING.md для навыка Геры")
+    sub.add_parser("guard", help="пересобрать hooks/profile_guard.json из реестра")
 
     args = ap.parse_args()
     reg = load_registry()
@@ -487,10 +566,15 @@ def main() -> int:
     if args.cmd == "install":
         install_profile(reg, args.name, dry=args.dry_run)
         build_routing(reg, dry=args.dry_run)
+        build_guard(reg, dry=args.dry_run)
         return 0
 
     if args.cmd == "routing":
         build_routing(reg)
+        return 0
+
+    if args.cmd == "guard":
+        build_guard(reg)
         return 0
 
     return 0

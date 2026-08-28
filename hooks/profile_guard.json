@@ -1,31 +1,67 @@
 {
   "_": [
-    "Карта «что чья зона» для хука hooks/profile_guard.py.",
-    "Добавить профиль в конвейер = добавить сюда один блок и выкатить файл.",
-    "Код хука при этом не трогается.",
+    "СГЕНЕРИРОВАНО scripts/profile_forge.py из profiles/registry.yaml.",
+    "Руками не править — менять реестр (блок guard: у профиля) и пересобирать:",
+    "    python3 scripts/profile_forge.py guard",
+    "",
+    "Карта «что чья зона» для хука hooks/profile_guard.py. Код хука при",
+    "добавлении профиля не трогается.",
     "",
     "enabled=false — блок описан, но не применяется. Так профиль заводится и",
     "проверяется до того, как Гере что-то запрещают: сначала он проходит",
     "profile-acceptance, потом флаг переводится в true.",
     "",
-    "skills  — навыки, чей вызов у Геры означает «полез делать сам».",
-    "          Инфраструктурные навыки профиля сюда НЕ входят: balance и",
+    "skills  — навыки, чей вызов у Геры означает «полез делать сам». Берутся",
+    "          из skills профиля минус guard_skip плюс guard_extra.",
+    "          guard_skip нужен для инфраструктурных навыков: balance и",
     "          s3-upload лежат у docs, но Гера пользуется ими законно.",
     "markers — подстроки в команде терминала / коде / пути записи, по которым",
-    "          видно ту же работу в обход навыка (он умеет python-docx руками).",
+    "          видно ту же работу в обход навыка.",
     "what    — как зона называется человеческими словами; уходит в текст отказа."
   ],
   "version": 1,
   "log": "/root/.hermes/logs/profile_guard.jsonl",
   "profiles": {
+    "content": {
+      "enabled": false,
+      "what": "контент для соцсетей и публикации",
+      "skills": [
+        "content-studio",
+        "postmypost",
+        "ai-image-prompts",
+        "tilda-store-assets",
+        "personal-brandbook"
+      ],
+      "markers": []
+    },
+    "dev": {
+      "enabled": true,
+      "what": "код и автоматизация: скрипты, расширения, интеграции Tilda",
+      "skills": [
+        "systematic-debugging",
+        "test-driven-development",
+        "simplify-code",
+        "plan",
+        "python-debugpy",
+        "requesting-code-review",
+        "codebase-inspection",
+        "github-pr-workflow",
+        "tilda-page-editor",
+        "tilda-internal-api",
+        "tilda-webdav-agent",
+        "tilda-transport",
+        "tilda-integration"
+      ],
+      "markers": []
+    },
     "docs": {
       "enabled": true,
       "what": "документы: КП, счета, оферты, акты, налоговые расчёты",
       "skills": [
         "business-documents",
-        "docx",
-        "docx-editing",
         "proposal-formatting",
+        "docx-editing",
+        "docx",
         "rus-ip-tax-calc"
       ],
       "markers": [
@@ -36,41 +72,28 @@
         ".docx"
       ]
     },
-    "dev": {
-      "enabled": false,
-      "what": "код и интеграции Tilda",
-      "skills": [
-        "tilda-api",
-        "tilda-page-editor",
-        "tilda-internal-api",
-        "tilda-webdav-agent",
-        "tilda-transport",
-        "tilda-integration"
-      ],
-      "markers": []
-    },
     "seo": {
       "enabled": false,
-      "what": "SEO: семантика, мета-теги, тексты под поиск",
+      "what": "SEO: мета-теги, частотности, механика Tilda",
       "skills": [
-        "seo-optimization",
-        "seo-content-writing",
-        "semantic-core",
-        "geo-optimization",
-        "lova-seo-content",
+        "seo-tilda",
         "wordstat-api",
-        "yandex-wordstat"
+        "yandex-wordstat",
+        "tilda-api",
+        "google-search-console",
+        "seo-optimization"
       ],
       "markers": []
     },
-    "content": {
+    "strategist": {
       "enabled": false,
-      "what": "контент для соцсетей и публикации",
+      "what": "стратегия: семантика, маркетинг, позиционирование",
       "skills": [
-        "content-studio",
-        "postmypost-publish",
-        "lead-magnets",
-        "personal-brandbook"
+        "semantic-core",
+        "jobs-to-be-done",
+        "personal-brandbook",
+        "geo-optimization",
+        "grounded-citations"
       ],
       "markers": []
     },
@@ -78,10 +101,10 @@
       "enabled": false,
       "what": "редактура и вычитка текстов",
       "skills": [
-        "humanizer",
         "professional-text-editing",
+        "avoid-ai-writing",
         "text-editing",
-        "avoid-ai-writing"
+        "humanizer"
       ],
       "markers": []
     }

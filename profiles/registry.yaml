@@ -105,6 +105,13 @@ defaults:
 profiles:
 
   docs:
+    guard:
+      enabled: true
+      what: "документы: КП, счета, оферты, акты, налоговые расчёты"
+      # Инфраструктурные навыки профиля сюда НЕ входят: balance и s3-upload
+      # лежат у docs, но Гера пользуется ими законно.
+      guard_skip: [balance, s3-upload]
+      markers: ["python-docx", "from docx import", "import docx", "docxtpl", ".docx"]
     title: "Документы"
     model: deepseek/deepseek-v4-pro
     critic: qwen/qwen3.7-max
@@ -155,6 +162,20 @@ profiles:
       balance: ops/balance
 
   dev:
+    guard:
+      enabled: true
+      what: "код и автоматизация: скрипты, расширения, интеграции Tilda"
+      # Сверх навыков профиля: Tilda-механика, которую Гера открывал вместо
+      # делегирования в замере 28.08 (skill_view tilda-internal-api).
+      # `tilda-api` сюда НЕ входит — он числится за seo (массовая правка
+      # мета-тегов). Один навык в двух включённых зонах означает, что задачу
+      # заберёт та, что попалась первой, а не та, чья она.
+      guard_extra: [tilda-page-editor, tilda-internal-api,
+                    tilda-webdav-agent, tilda-transport, tilda-integration]
+      # Маркеров нет намеренно. Гера постоянно и законно пишет себе скрипты
+      # (cron, метрика, разбор state.db) — маркер вроде «.py» превратил бы
+      # сторожа в глухую стену. Сигнал по навыкам точнее.
+      markers: []
     title: "Код и автоматизация"
     model: qwen/qwen3.7-max
     critic: google/gemini-3.7-flash
@@ -206,6 +227,11 @@ profiles:
       github-pr-workflow: github/github-pr-workflow
 
   content:
+    guard:
+      enabled: false
+      what: "контент для соцсетей и публикации"
+      guard_skip: [s3-upload, image-vision]
+      markers: []
     title: "Контент и соцсети"
     model: deepseek/deepseek-v4-pro
     critic: deepseek/deepseek-v4-pro
@@ -246,6 +272,10 @@ profiles:
       personal-brandbook: marketing/personal-brandbook
 
   seo:
+    guard:
+      enabled: false
+      what: "SEO: мета-теги, частотности, механика Tilda"
+      markers: []
     title: "SEO-механика"
     model: deepseek/deepseek-v4-pro
     critic: google/gemini-3.7-flash
@@ -284,6 +314,10 @@ profiles:
       seo-optimization: research/seo-optimization
 
   strategist:
+    guard:
+      enabled: false
+      what: "стратегия: семантика, маркетинг, позиционирование"
+      markers: []
     title: "Стратегия"
     model: deepseek/deepseek-v4-pro
     critic: qwen/qwen3.7-max
@@ -314,6 +348,10 @@ profiles:
       grounded-citations: research/grounded-citations
 
   writer:
+    guard:
+      enabled: false
+      what: "редактура и вычитка текстов"
+      markers: []
     title: "Литература и редактура"
     model: anthropic/claude-sonnet-5
     critic: qwen/qwen3.7-max
