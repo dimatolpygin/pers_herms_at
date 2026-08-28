@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -357,9 +358,16 @@ def install_profile(reg: dict, name: str, dry: bool = False) -> float:
         for entry in skills_dir.iterdir():
             if entry.is_symlink() and entry.name not in want:
                 entry.unlink()
+        #    После диеты в каталогах категорий остаётся один DESCRIPTION.md —
+        #    подпись рубрики из поставочного дерева, без единого навыка. Такие
+        #    каталоги тоже уносим: условие «внутри нет ни одного SKILL.md и ни
+        #    одного симлинка» гарантирует, что настоящий навык не заденем.
         for entry in sorted(skills_dir.rglob("*"), key=lambda x: -len(x.parts)):
-            if entry.is_dir() and not entry.is_symlink() and not any(entry.iterdir()):
-                entry.rmdir()
+            if not entry.is_dir() or entry.is_symlink():
+                continue
+            if any(entry.rglob("SKILL.md")) or any(x.is_symlink() for x in entry.rglob("*")):
+                continue
+            shutil.rmtree(entry, ignore_errors=True)
         for link, target in want.items():
             dst = skills_dir / link
             tgt = SHARED_SKILLS / target
