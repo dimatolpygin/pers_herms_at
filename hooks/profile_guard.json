@@ -52,7 +52,14 @@
         "tilda-transport",
         "tilda-integration"
       ],
-      "markers": []
+      "markers": [
+        "manifest_version",
+        "content_scripts",
+        "chrome.runtime",
+        "chrome.tabs",
+        "puppeteer",
+        "playwright"
+      ]
     },
     "docs": {
       "enabled": true,
